@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Uninstallation Script
+# Walph Riggum - Uninstallation Script
 
 set -euo pipefail
 
 INSTALL_DIR="${HOME}/bin"
 
-echo "Ralph Wiggum Uninstaller"
+echo "Walph Riggum Uninstaller"
 echo "========================"
 echo ""
 
 # Remove wrapper scripts
-if [[ -f "$INSTALL_DIR/ralph" ]]; then
-    echo "Removing $INSTALL_DIR/ralph..."
-    rm -f "$INSTALL_DIR/ralph"
+if [[ -f "$INSTALL_DIR/walph" ]]; then
+    echo "Removing $INSTALL_DIR/walph..."
+    rm -f "$INSTALL_DIR/walph"
 fi
 
-if [[ -f "$INSTALL_DIR/ralph-init" ]]; then
-    echo "Removing $INSTALL_DIR/ralph-init..."
-    rm -f "$INSTALL_DIR/ralph-init"
+if [[ -f "$INSTALL_DIR/walph-init" ]]; then
+    echo "Removing $INSTALL_DIR/walph-init..."
+    rm -f "$INSTALL_DIR/walph-init"
 fi
 
 echo ""
 echo "Uninstallation complete!"
 echo ""
-echo "Note: This script does not remove the ralphwiggum directory."
+echo "Note: This script does not remove the walphriggum directory."
 echo "To fully remove, delete: $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

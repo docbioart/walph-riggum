@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Utility Functions
+# Walph Riggum - Utility Functions
 
 # ============================================================================
 # GENERAL UTILITIES
@@ -197,21 +197,21 @@ start_monitor_session() {
 # VERSION AND HELP
 # ============================================================================
 
-RALPH_VERSION="1.0.0"
+WALPH_VERSION="1.0.0"
 
 show_version() {
-    echo "Ralph Wiggum v${RALPH_VERSION}"
+    echo "Walph Riggum v${WALPH_VERSION}"
 }
 
 show_help() {
     cat << 'EOF'
-Ralph Wiggum - Autonomous Coding Loop
+Walph Riggum - Autonomous Coding Loop
 
 USAGE:
-    ralph.sh <command> [options]
+    walph.sh <command> [options]
 
 COMMANDS:
-    init [name]       Initialize a new project (run 'ralph.sh init --help' for details)
+    init [name]       Initialize a new project (run 'walph.sh init --help' for details)
     plan              Run in planning mode (generates IMPLEMENTATION_PLAN.md)
     build             Run in building mode (implements from plan) [default]
     status            Show current state and progress
@@ -227,16 +227,16 @@ OPTIONS:
     --version             Show version
 
 EXAMPLES:
-    ralph.sh init my-app --stack node    # Initialize new project
-    ralph.sh plan                        # Generate implementation plan
-    ralph.sh build --max-iterations 10   # Build with limited iterations
-    ralph.sh status                      # Check current progress
+    walph.sh init my-app --stack node    # Initialize new project
+    walph.sh plan                        # Generate implementation plan
+    walph.sh build --max-iterations 10   # Build with limited iterations
+    walph.sh status                      # Check current progress
 
 WORKFLOW:
-    1. ralph.sh init my-app       # Create project structure
+    1. walph.sh init my-app       # Create project structure
     2. Edit specs/TEMPLATE.md     # Write your requirements
-    3. ralph.sh plan              # Generate task list
-    4. ralph.sh build             # Implement everything
+    3. walph.sh plan              # Generate task list
+    4. walph.sh build             # Implement everything
 
 For more information, see README.md and QUICKSTART.md
 EOF

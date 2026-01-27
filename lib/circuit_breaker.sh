@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Circuit Breaker
+# Walph Riggum - Circuit Breaker
 # Detects when the loop is stuck and should stop
 
 # ============================================================================
@@ -80,7 +80,7 @@ check_error_pattern() {
 # Check for explicit stuck signal from Claude
 check_stuck_signal() {
     local output="$1"
-    if echo "$output" | grep -q "RALPH_STUCK"; then
+    if echo "$output" | grep -q "WALPH_STUCK"; then
         return 0  # Stuck signal found
     fi
     return 1  # No stuck signal
@@ -124,7 +124,7 @@ update_circuit_breaker() {
 
     # Check for explicit stuck signal
     if check_stuck_signal "$iteration_output"; then
-        log_warn "Claude signaled RALPH_STUCK"
+        log_warn "Claude signaled WALPH_STUCK"
         return 1
     fi
 
@@ -196,7 +196,7 @@ circuit_breaker_triggered() {
     fi
 
     # Only check commit threshold in build mode
-    if [[ "${RALPH_MODE:-build}" == "build" ]]; then
+    if [[ "${WALPH_MODE:-build}" == "build" ]]; then
         if [[ "$no_commit_count" -ge "${CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD:-5}" ]]; then
             log_error "Circuit breaker: No commits for $no_commit_count iterations"
             return 0

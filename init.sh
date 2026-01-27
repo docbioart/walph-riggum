@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Project Initialization
+# Walph Riggum - Project Initialization
 # Creates a new Ralph-enabled project
 
 set -euo pipefail
@@ -20,7 +20,7 @@ INIT_GIT=true
 
 show_usage() {
     cat << 'EOF'
-Ralph Wiggum - Project Initialization
+Walph Riggum - Project Initialization
 
 USAGE:
     init.sh <project-name> [options]
@@ -82,25 +82,25 @@ parse_args() {
 # PROJECT CREATION
 # ============================================================================
 
-create_ralph_structure() {
+create_walph_structure() {
     local project_dir="$1"
 
     log_info "Creating Ralph directory structure..."
 
-    mkdir -p "$project_dir/.ralph/logs"
-    mkdir -p "$project_dir/.ralph/state"
+    mkdir -p "$project_dir/.walph/logs"
+    mkdir -p "$project_dir/.walph/state"
     mkdir -p "$project_dir/specs"
 
     # Copy config template
     source "$SCRIPT_DIR/lib/config.sh"
-    write_default_config "$project_dir/.ralph/config"
+    write_default_config "$project_dir/.walph/config"
 
     # Copy prompt templates
     if [[ -f "$SCRIPT_DIR/templates/PROMPT_plan.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_plan.md" "$project_dir/.ralph/"
+        cp "$SCRIPT_DIR/templates/PROMPT_plan.md" "$project_dir/.walph/"
     fi
     if [[ -f "$SCRIPT_DIR/templates/PROMPT_build.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_build.md" "$project_dir/.ralph/"
+        cp "$SCRIPT_DIR/templates/PROMPT_build.md" "$project_dir/.walph/"
     fi
 }
 
@@ -178,7 +178,7 @@ create_implementation_plan() {
     cat > "$project_dir/IMPLEMENTATION_PLAN.md" << 'EOF'
 # Implementation Plan
 
-<!-- This file will be populated by running 'ralph plan' -->
+<!-- This file will be populated by running 'walph plan' -->
 
 ## Overview
 
@@ -426,8 +426,8 @@ logs/
 *.log
 
 # Ralph state (keep config and prompts)
-.ralph/logs/
-.ralph/state/
+.walph/logs/
+.walph/state/
 
 # OS
 .DS_Store
@@ -454,7 +454,7 @@ init_git() {
         cd "$project_dir"
         git init
         git add .
-        git commit -m "Initial commit with Ralph Wiggum setup"
+        git commit -m "Initial commit with Walph Riggum setup"
     )
 }
 
@@ -473,7 +473,7 @@ main() {
         project_dir="$(pwd)/$PROJECT_NAME"
     fi
 
-    log_info "Initializing Ralph Wiggum project: $PROJECT_NAME"
+    log_info "Initializing Walph Riggum project: $PROJECT_NAME"
 
     # Create project directory if it doesn't exist
     if [[ ! -d "$project_dir" ]]; then
@@ -481,7 +481,7 @@ main() {
     fi
 
     # Create Ralph structure
-    create_ralph_structure "$project_dir"
+    create_walph_structure "$project_dir"
 
     # Create AGENTS.md
     create_agents_md "$project_dir" "$STACK"
@@ -510,9 +510,9 @@ main() {
     echo "Next steps:"
     echo "  1. cd $PROJECT_NAME"
     echo "  2. Edit specs/example.md with your requirements"
-    echo "  3. Run: ../ralph.sh plan"
+    echo "  3. Run: ../walph.sh plan"
     echo "  4. Review IMPLEMENTATION_PLAN.md"
-    echo "  5. Run: ../ralph.sh build"
+    echo "  5. Run: ../walph.sh build"
 }
 
 main "$@"

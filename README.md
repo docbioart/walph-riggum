@@ -1,12 +1,12 @@
-# Ralph Wiggum
+# Walph Riggum
 
 An autonomous coding loop that uses Claude to plan and build software projects.
 
-> "Me fail English? That's unpossible!" - Ralph Wiggum
+> "Me fail English? That's unpossible!" - Walph Riggum
 
 ## Overview
 
-Ralph Wiggum is a bash-based orchestration tool that runs Claude in an autonomous loop to:
+Walph Riggum is a bash-based orchestration tool that runs Claude in an autonomous loop to:
 1. **Plan** - Analyze specifications and generate implementation plans
 2. **Build** - Implement tasks one at a time, test, and commit
 
@@ -28,15 +28,15 @@ Ralph Wiggum is a bash-based orchestration tool that runs Claude in an autonomou
 ./install.sh
 ```
 
-This creates `ralph` and `ralph-init` commands in `~/bin`.
+This creates `ralph` and `walph-init` commands in `~/bin`.
 
 ### Option 2: Direct Usage
 
 Run scripts directly from the repository:
 
 ```bash
-./ralph.sh plan
-./ralph.sh build
+./walph.sh plan
+./walph.sh build
 ```
 
 ## Quick Start
@@ -68,7 +68,7 @@ cd my-project
 ### 3. Generate Plan
 
 ```bash
-../ralph.sh plan --max-iterations 3
+../walph.sh plan --max-iterations 3
 ```
 
 Review and edit `IMPLEMENTATION_PLAN.md` as needed.
@@ -76,7 +76,7 @@ Review and edit `IMPLEMENTATION_PLAN.md` as needed.
 ### 4. Build
 
 ```bash
-../ralph.sh build --max-iterations 50
+../walph.sh build --max-iterations 50
 ```
 
 Watch as Claude implements your project task by task!
@@ -84,7 +84,7 @@ Watch as Claude implements your project task by task!
 ## Commands
 
 ```bash
-ralph.sh <command> [options]
+walph.sh <command> [options]
 
 Commands:
   plan              Generate/update implementation plan
@@ -108,7 +108,7 @@ After initialization, your project will have:
 
 ```
 my-project/
-├── .ralph/
+├── .walph/
 │   ├── config                  # Configuration overrides
 │   ├── logs/                   # Session logs
 │   ├── state/                  # Circuit breaker state
@@ -123,7 +123,7 @@ my-project/
 
 ## Configuration
 
-### .ralph/config
+### .walph/config
 
 ```bash
 # Maximum iterations
@@ -142,9 +142,9 @@ CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
 ### Environment Variables
 
 ```bash
-export RALPH_MAX_ITERATIONS=100
-export RALPH_MODEL_PLAN="opus"
-export RALPH_MODEL_BUILD="sonnet"
+export WALPH_MAX_ITERATIONS=100
+export WALPH_MODEL_PLAN="opus"
+export WALPH_MODEL_BUILD="sonnet"
 ```
 
 ## How It Works
@@ -172,21 +172,21 @@ The loop stops automatically when:
 - No file changes for 3 consecutive iterations
 - Same error repeated 5 times
 - No commits for 5 iterations (build mode)
-- Claude signals `RALPH_STUCK`
+- Claude signals `WALPH_STUCK`
 
-Reset with: `ralph.sh reset`
+Reset with: `walph.sh reset`
 
 ### Completion Signal
 
 Claude outputs a status block each iteration:
 
 ```
-RALPH_STATUS
+WALPH_STATUS
 completion_level: HIGH
 tasks_remaining: 0
 current_task: All tasks complete
 EXIT_SIGNAL: true
-RALPH_STATUS_END
+WALPH_STATUS_END
 ```
 
 The loop exits when `completion_level: HIGH` AND `EXIT_SIGNAL: true`.
@@ -195,7 +195,7 @@ The loop exits when `completion_level: HIGH` AND `EXIT_SIGNAL: true`.
 
 ### Custom Prompts
 
-Copy and modify the prompts in `.ralph/`:
+Copy and modify the prompts in `.walph/`:
 - `PROMPT_plan.md` - Planning instructions
 - `PROMPT_build.md` - Building instructions
 
@@ -233,7 +233,7 @@ npm run lint
 ### Circuit Breaker Keeps Triggering
 
 ```bash
-ralph.sh reset
+walph.sh reset
 ```
 
 Then check:
@@ -250,7 +250,7 @@ The script will prompt you with options:
 
 ### Claude Stuck
 
-Look for `RALPH_STUCK` in logs. Common causes:
+Look for `WALPH_STUCK` in logs. Common causes:
 - Unclear requirements
 - Missing dependencies
 - Conflicting specs

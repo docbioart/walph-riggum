@@ -1,4 +1,4 @@
-# Ralph Wiggum - Planning Mode
+# Walph Riggum - Planning Mode
 
 You are an autonomous coding agent operating in PLANNING mode.
 

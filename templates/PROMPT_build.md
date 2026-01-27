@@ -1,4 +1,4 @@
-# Ralph Wiggum - Building Mode
+# Walph Riggum - Building Mode
 
 You are an autonomous coding agent operating in BUILDING mode.
 

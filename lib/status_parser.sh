@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Status Parser
-# Parses RALPH_STATUS blocks from Claude output
+# Walph Riggum - Status Parser
+# Parses WALPH_STATUS blocks from Claude output
 
 # ============================================================================
-# RALPH_STATUS BLOCK FORMAT
+# WALPH_STATUS BLOCK FORMAT
 # ============================================================================
 #
-# RALPH_STATUS
+# WALPH_STATUS
 # completion_level: HIGH|MEDIUM|LOW
 # tasks_remaining: <number>
 # current_task: <description>
 # EXIT_SIGNAL: true|false
-# RALPH_STATUS_END
+# WALPH_STATUS_END
 #
 
 # ============================================================================
 # PARSING FUNCTIONS
 # ============================================================================
 
-# Extract RALPH_STATUS block from output
+# Extract WALPH_STATUS block from output
 # Returns the block content or empty string if not found
 extract_status_block() {
     local output="$1"
 
     # Use sed to extract between markers
-    echo "$output" | sed -n '/RALPH_STATUS$/,/RALPH_STATUS_END/p' 2>/dev/null
+    echo "$output" | sed -n '/WALPH_STATUS$/,/WALPH_STATUS_END/p' 2>/dev/null
 }
 
 # Parse a field from status block

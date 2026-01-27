@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Configuration
+# Walph Riggum - Configuration
 # Default settings and configuration management
 
 # ============================================================================
@@ -9,8 +9,8 @@
 DEFAULT_MAX_ITERATIONS=50
 DEFAULT_MODEL_PLAN="opus"
 DEFAULT_MODEL_BUILD="sonnet"
-DEFAULT_LOG_DIR=".ralph/logs"
-DEFAULT_STATE_DIR=".ralph/state"
+DEFAULT_LOG_DIR=".walph/logs"
+DEFAULT_STATE_DIR=".walph/state"
 
 # Circuit breaker thresholds
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
@@ -27,7 +27,7 @@ RATE_LIMIT_RETRY_DELAY=60  # seconds
 # Load configuration from multiple sources (later sources override earlier)
 # Priority: defaults < config file < environment variables < command line
 load_config() {
-    local project_config="${PROJECT_DIR:-.}/.ralph/config"
+    local project_config="${PROJECT_DIR:-.}/.walph/config"
 
     # Load from config file if it exists
     if [[ -f "$project_config" ]]; then
@@ -36,11 +36,11 @@ load_config() {
     fi
 
     # Apply environment variable overrides
-    MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-${MAX_ITERATIONS:-$DEFAULT_MAX_ITERATIONS}}"
-    MODEL_PLAN="${RALPH_MODEL_PLAN:-${MODEL_PLAN:-$DEFAULT_MODEL_PLAN}}"
-    MODEL_BUILD="${RALPH_MODEL_BUILD:-${MODEL_BUILD:-$DEFAULT_MODEL_BUILD}}"
-    LOG_DIR="${RALPH_LOG_DIR:-${LOG_DIR:-$DEFAULT_LOG_DIR}}"
-    STATE_DIR="${RALPH_STATE_DIR:-${STATE_DIR:-$DEFAULT_STATE_DIR}}"
+    MAX_ITERATIONS="${WALPH_MAX_ITERATIONS:-${MAX_ITERATIONS:-$DEFAULT_MAX_ITERATIONS}}"
+    MODEL_PLAN="${WALPH_MODEL_PLAN:-${MODEL_PLAN:-$DEFAULT_MODEL_PLAN}}"
+    MODEL_BUILD="${WALPH_MODEL_BUILD:-${MODEL_BUILD:-$DEFAULT_MODEL_BUILD}}"
+    LOG_DIR="${WALPH_LOG_DIR:-${LOG_DIR:-$DEFAULT_LOG_DIR}}"
+    STATE_DIR="${WALPH_STATE_DIR:-${STATE_DIR:-$DEFAULT_STATE_DIR}}"
 }
 
 # Get the model for a given mode
@@ -70,7 +70,7 @@ ensure_directories() {
 write_default_config() {
     local config_file="$1"
     cat > "$config_file" << 'EOF'
-# Ralph Wiggum Configuration
+# Walph Riggum Configuration
 # Uncomment and modify as needed
 
 # Maximum iterations before stopping
@@ -81,7 +81,7 @@ write_default_config() {
 # MODEL_BUILD="claude-sonnet-4-20250514"
 
 # Logging directory (relative to project root)
-# LOG_DIR=".ralph/logs"
+# LOG_DIR=".walph/logs"
 
 # Circuit breaker thresholds
 # CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3

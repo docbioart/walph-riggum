@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Ralph Wiggum - Global Installation Script
+# Walph Riggum - Global Installation Script
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="${HOME}/bin"
 
-echo "Ralph Wiggum Installer"
+echo "Walph Riggum Installer"
 echo "======================"
 echo ""
 
@@ -19,22 +19,22 @@ fi
 # Create wrapper script
 echo "Installing ralph command..."
 
-cat > "$INSTALL_DIR/ralph" << EOF
+cat > "$INSTALL_DIR/walph" << EOF
 #!/usr/bin/env bash
-# Ralph Wiggum wrapper script
-exec "$SCRIPT_DIR/ralph.sh" "\$@"
+# Walph Riggum wrapper script
+exec "$SCRIPT_DIR/walph.sh" "\$@"
 EOF
 
-chmod +x "$INSTALL_DIR/ralph"
+chmod +x "$INSTALL_DIR/walph"
 
 # Create init wrapper
-cat > "$INSTALL_DIR/ralph-init" << EOF
+cat > "$INSTALL_DIR/walph-init" << EOF
 #!/usr/bin/env bash
-# Ralph Wiggum init wrapper script
+# Walph Riggum init wrapper script
 exec "$SCRIPT_DIR/init.sh" "\$@"
 EOF
 
-chmod +x "$INSTALL_DIR/ralph-init"
+chmod +x "$INSTALL_DIR/walph-init"
 
 echo ""
 echo "Installation complete!"
@@ -52,4 +52,4 @@ fi
 echo "Usage:"
 echo "  ralph plan               # Generate implementation plan"
 echo "  ralph build              # Start building"
-echo "  ralph-init my-project    # Initialize new project"
+echo "  walph-init my-project    # Initialize new project"
