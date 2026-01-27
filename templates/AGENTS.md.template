@@ -1,0 +1,51 @@
+# Project: {{PROJECT_NAME}}
+
+## Build Commands
+
+```bash
+{{BUILD_COMMAND}}
+```
+
+## Test Commands
+
+```bash
+{{TEST_COMMAND}}
+```
+
+## Lint Commands
+
+```bash
+{{LINT_COMMAND}}
+```
+
+## Project Structure
+
+<!-- Describe your project structure here -->
+```
+{{PROJECT_NAME}}/
+├── src/           # Source code
+├── tests/         # Test files
+├── specs/         # Specification files
+└── ...
+```
+
+## Key Files
+
+<!-- List important files and their purposes -->
+- `src/index.ts` - Application entry point
+- `src/config.ts` - Configuration management
+
+## Dependencies
+
+<!-- Key dependencies and why they're used -->
+- Express - Web framework
+- TypeScript - Type safety
+
+## Notes for Claude
+
+- Always run tests after making changes
+- Commit after each completed task
+- Follow existing code style and patterns
+- Ask for clarification if requirements are unclear
+- Prefer smaller, focused changes over large refactors
+- Check for existing implementations before creating new ones
