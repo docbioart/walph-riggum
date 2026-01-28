@@ -25,11 +25,11 @@ This is how humans work on large projects: do one thing, save your work, take a 
 
 ## How It's Different
 
-| Approach | Context | Memory | Best For |
-|----------|---------|--------|----------|
-| **Interactive Claude Code** | Accumulates | In conversation | Small tasks, exploration |
-| **Claude Code plugins** | Accumulates | In conversation | Extending functionality |
-| **Walph Riggum** | Fresh each iteration | Files + Git | Large projects, autonomy |
+| Approach | Context | Memory | Docs-to-Code | Best For |
+|----------|---------|--------|--------------|----------|
+| **Interactive Claude Code** | Accumulates | In conversation | Manual | Small tasks, exploration |
+| **Claude Code plugins** | Accumulates | In conversation | Manual | Extending functionality |
+| **Walph Riggum** | Fresh each iteration | Files + Git | One-shot via Jeeroy `--lfg` | Large projects, autonomy |
 
 Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
 
