@@ -25,11 +25,11 @@ This is how humans work on large projects: do one thing, save your work, take a 
 
 ## How It's Different
 
-| Approach | Context | Memory | Docs-to-Code | Best For |
-|----------|---------|--------|--------------|----------|
-| **Interactive Claude Code** | Accumulates | In conversation | Manual | Small tasks, exploration |
-| **Claude Code plugins** | Accumulates | In conversation | Manual | Extending functionality |
-| **Walph Riggum** | Fresh each iteration | Files + Git | One-shot via Jeeroy `--lfg` | Large projects, autonomy |
+| Approach                     | Context              | Memory          | Docs-to-Code                | Best For                 |
+|------------------------------|----------------------|-----------------|-----------------------------|--------------------------|
+| **Interactive Claude Code**  | Accumulates          | In conversation | Manual                      | Small tasks, exploration |
+| **Claude Code plugins**      | Accumulates          | In conversation | Manual                      | Extending functionality  |
+| **Walph Riggum**             | Fresh each iteration | Files + Git     | One-shot via Jeeroy `--lfg` | Large projects, autonomy |
 
 Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
 
@@ -40,20 +40,20 @@ Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Cla
 │                         WALPH LOOP                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   ┌─────────┐     ┌──────────────┐     ┌─────────┐             │
-│   │  specs/ │────▶│  walph plan  │────▶│  PLAN   │             │
-│   │  (you)  │     │   (Opus)     │     │  .md    │             │
-│   └─────────┘     └──────────────┘     └────┬────┘             │
+│   ┌─────────┐     ┌──────────────┐     ┌─────────┐              │
+│   │  specs/ │────>│  walph plan  │────>│  PLAN   │              │
+│   │  (you)  │     │   (Opus)     │     │  .md    │              │
+│   └─────────┘     └──────────────┘     └────┬────┘              │
 │                                             │                   │
-│                                             ▼                   │
-│   ┌─────────┐     ┌──────────────┐     ┌─────────┐             │
-│   │  Code   │◀────│ walph build  │◀────│  PLAN   │             │
-│   │  + Git  │     │  (Sonnet)    │     │  .md    │             │
-│   └─────────┘     └──────┬───────┘     └─────────┘             │
+│                                             v                   │
+│   ┌─────────┐     ┌──────────────┐     ┌─────────┐              │
+│   │  Code   │<────│ walph build  │<────│  PLAN   │              │
+│   │  + Git  │     │  (Sonnet)    │     │  .md    │              │
+│   └─────────┘     └──────┬───────┘     └─────────┘              │
 │                          │                                      │
 │                          │ loop until done                      │
 │                          │ or stuck                             │
-│                          ▼                                      │
+│                          v                                      │
 │                   ┌──────────────┐                              │
 │                   │   Complete   │                              │
 │                   └──────────────┘                              │
@@ -202,11 +202,11 @@ export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
 
 Walph automatically stops when Claude appears stuck:
 
-| Trigger | Threshold | Meaning |
-|---------|-----------|---------|
+| Trigger         | Threshold    | Meaning                     |
+|-----------------|--------------|------------------------------|
 | No file changes | 3 iterations | Claude isn't producing code |
-| Same error | 5 times | Stuck on the same problem |
-| No commits | 5 iterations | Tasks aren't completing |
+| Same error      | 5 times      | Stuck on the same problem   |
+| No commits      | 5 iterations | Tasks aren't completing     |
 
 Reset with `walph reset`, then check your specs for clarity.
 
@@ -245,7 +245,7 @@ Walph will prompt you: wait, exit, or continue. Usually best to wait.
   Documents (any format)          Walph Specs
   ┌──────────┐                    ┌──────────┐
   │ .docx    │                    │ specs/   │
-  │ .pdf     │───▶ Jeeroy ───▶  │ *.md     │───▶ walph plan → build
+  │ .pdf     │───> Jeeroy ───>    │ *.md     │───> walph plan -> build
   │ .pptx    │    (Claude)        │          │
   │ .md/.txt │                    └──────────┘
   └──────────┘
@@ -275,17 +275,17 @@ jeeroy ./client-docs --skip-qa --lfg
 
 ### Supported Formats
 
-| Format | Extension | Method |
-|--------|-----------|--------|
-| Markdown | `.md` | Direct read |
-| Plain text | `.txt` | Direct read |
-| Word | `.docx`, `.doc` | Pandoc |
-| PowerPoint | `.pptx`, `.ppt` | Pandoc |
-| PDF | `.pdf` | Pandoc / pdftotext |
-| HTML | `.html`, `.htm` | Pandoc |
-| Rich Text | `.rtf` | Pandoc |
-| OpenDocument | `.odt` | Pandoc |
-| EPUB | `.epub` | Pandoc |
+| Format       | Extension       | Method              |
+|--------------|-----------------|---------------------|
+| Markdown     | `.md`           | Direct read         |
+| Plain text   | `.txt`          | Direct read         |
+| Word         | `.docx`, `.doc` | Pandoc              |
+| PowerPoint   | `.pptx`, `.ppt` | Pandoc              |
+| PDF          | `.pdf`          | Pandoc / pdftotext  |
+| HTML         | `.html`, `.htm` | Pandoc              |
+| Rich Text    | `.rtf`          | Pandoc              |
+| OpenDocument | `.odt`          | Pandoc              |
+| EPUB         | `.epub`         | Pandoc              |
 
 ### Requirements
 
