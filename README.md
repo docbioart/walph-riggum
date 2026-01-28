@@ -230,6 +230,25 @@ Reset with `walph reset`, then check your specs for clarity.
 ### Rate limit hit
 Walph will prompt you: wait, exit, or continue. Usually best to wait.
 
+## Inspiration & Background
+
+Walph Riggum is inspired by the **Ralph Wiggum technique** pioneered by Geoffrey Huntley - a simple bash loop that repeatedly feeds Claude a prompt until completion. The name comes from The Simpsons character who embodies persistent iteration despite setbacks.
+
+> "The technique is deterministically bad in an undeterministic world. It's better to fail predictably than succeed unpredictably."
+
+The original Ralph Wiggum approach uses a Stop hook to intercept Claude's exit and re-feed the same prompt. Each iteration sees modified files from previous runs. This has produced remarkable results - developers completing $50K contracts for $297 in API costs, running loops overnight to wake up to working code.
+
+**But there's a catch**: context compaction. As Huntley noted, *"Compaction is the devil."* In long-running sessions, Claude's context window fills up and gets summarized, potentially losing the original goal.
+
+**Walph takes a different approach**: instead of fighting context compaction, we embrace fresh context. Each iteration starts clean. Memory lives in files (`IMPLEMENTATION_PLAN.md`, git commits), not in Claude's conversation history. This trades some continuity for predictability - Claude always sees the full, uncompacted state.
+
+### Further Reading
+
+- [Original Reddit breakdown](https://www.reddit.com/r/ClaudeAI/comments/1qlqaub/my_ralph_wiggum_breakdown_just_got_endorsed_as/) - The post that inspired this project
+- [Ralph Wiggum on Awesome Claude](https://awesomeclaude.ai/ralph-wiggum) - Community resources
+- [11 Tips for AI Coding with Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) - Practical guidance
+- [A Brief History of Ralph](https://www.humanlayer.dev/blog/brief-history-of-ralph) - How the technique evolved
+
 ## Philosophy
 
 Walph is built on the idea that **the best AI coding assistant is one that works like a disciplined developer**:
