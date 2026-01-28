@@ -1043,7 +1043,7 @@ show_status() {
     echo "Project: $PROJECT_DIR"
 
     if [[ -d "$PROJECT_DIR/.walph" ]]; then
-        echo "Ralph initialized: Yes"
+        echo "Walph initialized: Yes"
 
         # Circuit breaker status
         if [[ -f "$PROJECT_DIR/.walph/state/circuit_breaker.json" ]]; then
@@ -1064,12 +1064,12 @@ show_status() {
             echo "Implementation plan: Not found (run 'walph plan' first)"
         fi
     else
-        echo "Ralph initialized: No (run 'walph init' in project directory)"
+        echo "Walph initialized: No (run 'walph init' in project directory)"
     fi
 }
 
 reset_state() {
-    log_info "Resetting Ralph state..."
+    log_info "Resetting Walph state..."
 
     if [[ -d "$PROJECT_DIR/.walph/state" ]]; then
         rm -f "$PROJECT_DIR/.walph/state/"*.json
@@ -1093,7 +1093,7 @@ run_init() {
         target_dir="$(pwd)/$INIT_PROJECT_NAME"
     fi
 
-    log_info "Initializing Ralph project: $INIT_PROJECT_NAME"
+    log_info "Initializing Walph project: $INIT_PROJECT_NAME"
 
     # Create project directory if needed
     if [[ ! -d "$target_dir" ]]; then
@@ -1139,7 +1139,7 @@ EOF
     cat > "$target_dir/specs/README.md" << 'EOF'
 # Specifications
 
-Put your feature specs in this directory. Ralph reads ALL `.md` files here (except README.md).
+Put your feature specs in this directory. Walph reads ALL `.md` files here (except README.md).
 
 ## Quick Start
 
@@ -1166,7 +1166,7 @@ Put your feature specs in this directory. Ralph reads ALL `.md` files here (exce
 |---------|---------|
 | Overview | What and why (1-2 sentences) |
 | Requirements | Specific, testable items |
-| Files to Create | What Ralph should make |
+| Files to Create | What Walph should make |
 | Acceptance Criteria | Checkboxes to verify |
 | Examples | Input/output pairs |
 EOF
@@ -1479,7 +1479,7 @@ main_loop() {
 # INITIALIZATION AND MAIN
 # ============================================================================
 
-init_ralph() {
+init_walph() {
     # Load configuration
     load_config
 
@@ -1519,9 +1519,9 @@ init_ralph() {
 main() {
     parse_args "$@"
 
-    # Check if we're in a Ralph-enabled project
+    # Check if we're in a Walph-enabled project
     if [[ ! -d "$PROJECT_DIR/.walph" ]] && [[ ! -f "$PROJECT_DIR/AGENTS.md" ]]; then
-        log_warn "This doesn't appear to be a Ralph-enabled project."
+        log_warn "This doesn't appear to be a Walph-enabled project."
         log_info "Run 'walph init' or create a .walph directory first."
         if ! ask_yes_no "Continue anyway?"; then
             exit 0
@@ -1529,12 +1529,12 @@ main() {
         mkdir -p "$PROJECT_DIR/.walph"
     fi
 
-    init_ralph
+    init_walph
 
     # Start monitoring if requested
     if [[ "$MONITOR_MODE" == "true" ]]; then
         log_info "Starting monitoring session..."
-        start_monitor_session "$PROJECT_DIR/$LOG_DIR/ralph_$(generate_session_id).log" "$PROJECT_DIR"
+        start_monitor_session "$PROJECT_DIR/$LOG_DIR/walph_$(generate_session_id).log" "$PROJECT_DIR"
     fi
 
     # Run main loop

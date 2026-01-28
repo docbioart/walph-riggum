@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Walph Riggum - Project Initialization
-# Creates a new Ralph-enabled project
+# Creates a new Walph-enabled project
 
 set -euo pipefail
 
@@ -85,7 +85,7 @@ parse_args() {
 create_walph_structure() {
     local project_dir="$1"
 
-    log_info "Creating Ralph directory structure..."
+    log_info "Creating Walph directory structure..."
 
     mkdir -p "$project_dir/.walph/logs"
     mkdir -p "$project_dir/.walph/state"
@@ -211,7 +211,7 @@ create_example_spec() {
     cat > "$project_dir/specs/README.md" << 'EOF'
 # Specifications
 
-Put your feature specs in this directory. Ralph reads ALL `.md` files here.
+Put your feature specs in this directory. Walph reads ALL `.md` files here.
 
 ## How to Write a Spec
 
@@ -425,7 +425,7 @@ build/
 logs/
 *.log
 
-# Ralph state (keep config and prompts)
+# Walph state (keep config and prompts)
 .walph/logs/
 .walph/state/
 

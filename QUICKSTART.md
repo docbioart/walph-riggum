@@ -63,7 +63,7 @@ Walph will:
 
 ## Step 2: Write Your Spec
 
-Replace `specs/example.md` with your requirements. Ralph reads ALL `.md` files in `specs/`.
+Replace `specs/example.md` with your requirements. Walph reads ALL `.md` files in `specs/`.
 
 ### Spec Template
 
@@ -213,7 +213,7 @@ npm run lint
 ../walph.sh plan --max-iterations 2
 ```
 
-Ralph will:
+Walph will:
 1. Read all specs in `specs/`
 2. Read `AGENTS.md`
 3. Generate `IMPLEMENTATION_PLAN.md` with tasks
@@ -235,7 +235,7 @@ Edit manually if needed before building.
 ../walph.sh build --max-iterations 20
 ```
 
-Ralph will loop:
+Walph will loop:
 1. Pick first unchecked task `- [ ]`
 2. Implement it
 3. Run tests

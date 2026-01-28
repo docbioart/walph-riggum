@@ -17,7 +17,7 @@ if [[ ! -d "$INSTALL_DIR" ]]; then
 fi
 
 # Create wrapper script
-echo "Installing ralph command..."
+echo "Installing walph command..."
 
 cat > "$INSTALL_DIR/walph" << EOF
 #!/usr/bin/env bash
@@ -50,6 +50,6 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
 fi
 
 echo "Usage:"
-echo "  ralph plan               # Generate implementation plan"
-echo "  ralph build              # Start building"
-echo "  walph-init my-project    # Initialize new project"
+echo "  walph plan               # Generate implementation plan"
+echo "  walph build              # Start building"
+echo "  walph init my-project    # Initialize new project"
