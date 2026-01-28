@@ -1,278 +1,245 @@
 # Walph Riggum
 
-An autonomous coding loop that uses Claude to plan and build software projects.
+An autonomous coding loop that runs Claude from the *outside* to build software projects with clean context every iteration.
 
 > "Me fail English? That's unpossible!" - Walph Riggum
 
-## Overview
+## Why Walph?
 
-Walph Riggum is a bash-based orchestration tool that runs Claude in an autonomous loop to:
-1. **Plan** - Analyze specifications and generate implementation plans
-2. **Build** - Implement tasks one at a time, test, and commit
+### The Problem with Long Sessions
 
-### Key Features
+When you use Claude Code interactively for a large project, the context window fills up. Claude starts forgetting earlier decisions, repeating mistakes, or losing track of what's been done. The conversation becomes unwieldy.
 
-- **Dual-mode operation**: Planning mode (Opus) and Building mode (Sonnet)
-- **Circuit breaker**: Automatically stops when stuck
-- **Iteration limits**: Configurable max iterations
-- **Rate limit handling**: Graceful handling of API limits
-- **Structured completion signals**: Clear communication of progress
-- **Git integration**: Commits after each completed task
-- **Docker templates**: Quick setup for Node.js and Python projects
+### The Solution: Fresh Context, Persistent Memory
 
-## Installation
+Walph takes a different approach:
 
-### Option 1: Global Install
+- **Each iteration starts fresh** - Claude gets a clean context window every time
+- **Memory lives in files** - `IMPLEMENTATION_PLAN.md` tracks progress, git commits preserve history
+- **One task at a time** - Claude focuses on a single task, completes it, commits, exits
+- **The loop continues** - Walph restarts Claude with the updated state
 
-```bash
-./install.sh
+This is how humans work on large projects: do one thing, save your work, take a break, come back with fresh eyes.
+
+## How It's Different
+
+| Approach | Context | Memory | Best For |
+|----------|---------|--------|----------|
+| **Interactive Claude Code** | Accumulates | In conversation | Small tasks, exploration |
+| **Claude Code plugins** | Accumulates | In conversation | Extending functionality |
+| **Walph Riggum** | Fresh each iteration | Files + Git | Large projects, autonomy |
+
+Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         WALPH LOOP                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌─────────┐     ┌──────────────┐     ┌─────────┐             │
+│   │  specs/ │────▶│  walph plan  │────▶│  PLAN   │             │
+│   │  (you)  │     │   (Opus)     │     │  .md    │             │
+│   └─────────┘     └──────────────┘     └────┬────┘             │
+│                                             │                   │
+│                                             ▼                   │
+│   ┌─────────┐     ┌──────────────┐     ┌─────────┐             │
+│   │  Code   │◀────│ walph build  │◀────│  PLAN   │             │
+│   │  + Git  │     │  (Sonnet)    │     │  .md    │             │
+│   └─────────┘     └──────┬───────┘     └─────────┘             │
+│                          │                                      │
+│                          │ loop until done                      │
+│                          │ or stuck                             │
+│                          ▼                                      │
+│                   ┌──────────────┐                              │
+│                   │   Complete   │                              │
+│                   └──────────────┘                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-This creates `walph` and `walph-init` commands in `~/bin`.
+1. **You write specs** in `specs/*.md` - describe what you want built
+2. **Plan phase** (Opus) - Claude reads specs and generates a task list in `IMPLEMENTATION_PLAN.md`
+3. **Build phase** (Sonnet) - Claude picks ONE task, implements it, runs tests, marks it done, commits
+4. **Loop** - Walph restarts Claude with the updated plan, repeating until all tasks are complete
 
-### Option 2: Direct Usage
+Each build iteration is independent. Claude reads the current state from files, does one task, saves its work. No context accumulation, no memory degradation.
 
-Run scripts directly from the repository:
+## Features
 
-```bash
-./walph.sh plan
-./walph.sh build
-```
-
-## Adding Walph to an Existing Project
-
-If you already have a project and want to use Walph:
-
-```bash
-cd your-existing-project
-/path/to/walph.sh setup            # Auto-detects stack
-# or
-/path/to/walph.sh setup --stack python  # Specify stack
-```
-
-This creates:
-- `.walph/` - Configuration and prompts
-- `specs/` - For your requirements (if not exists)
-- `AGENTS.md` - Build/test commands (if not exists)
-- `IMPLEMENTATION_PLAN.md` - Task list (if not exists)
-
-Then edit `AGENTS.md` with your actual build/test commands.
+- **Dual-model strategy**: Opus for planning (smarter), Sonnet for building (faster)
+- **Circuit breaker**: Auto-stops if Claude gets stuck (no changes, same error, no commits)
+- **Git-native**: Every completed task becomes a commit - easy to review, revert, or continue
+- **Stack templates**: Quick setup for Node.js, Python, Swift, Kotlin, Capacitor, and more
+- **Customizable prompts**: Modify `.walph/PROMPT_*.md` to change Claude's behavior
+- **Existing project support**: `walph setup` adds Walph to any project
 
 ## Quick Start
 
-> **See [QUICKSTART.md](QUICKSTART.md) for detailed instructions and templates.**
-
-### 1. Initialize a Project
+### New Project
 
 ```bash
-# Create new project with Node.js stack
-./init.sh my-project --stack node
+# Clone Walph
+git clone https://github.com/docbioart/walph-riggum.git
+cd walph-riggum
 
-# Or with Python
-./init.sh my-project --stack python
+# Create a new project
+./walph.sh init my-api --template api
 
-# With Docker support
-./init.sh my-project --stack node --docker
+# Enter project and write your spec
+cd my-api
+# Edit specs/TEMPLATE.md with what you want built
+
+# Generate the plan
+../walph.sh plan
+
+# Review IMPLEMENTATION_PLAN.md, then build
+../walph.sh build --max-iterations 20
 ```
 
-### 2. Write Specifications
-
-Edit files in `specs/` to describe what you want to build:
+### Existing Project
 
 ```bash
-cd my-project
-# Edit specs/api.md, specs/features.md, etc.
-```
+cd your-existing-project
 
-### 3. Generate Plan
+# Add Walph (auto-detects your stack)
+/path/to/walph.sh setup
 
-```bash
-../walph.sh plan --max-iterations 3
-```
+# Edit AGENTS.md with your build/test commands
+# Write specs in specs/
 
-Review and edit `IMPLEMENTATION_PLAN.md` as needed.
-
-### 4. Build
-
-```bash
-../walph.sh build --max-iterations 50
-```
-
-Watch as Claude implements your project task by task!
-
-## Commands
-
-```bash
-walph.sh <command> [options]
-
-Commands:
-  plan              Generate/update implementation plan
-  build             Implement tasks from plan (default)
-  status            Show current state and progress
-  reset             Reset circuit breaker and state
-
-Options:
-  --max-iterations N    Maximum iterations (default: 50)
-  --model MODEL         Override model for this run
-  --monitor             Enable tmux monitoring view
-  --dry-run             Show what would run without executing
-  -v, --verbose         Verbose output
-  -h, --help            Show help
-  --version             Show version
+# Plan and build
+/path/to/walph.sh plan
+/path/to/walph.sh build
 ```
 
 ## Project Structure
 
-After initialization, your project will have:
+```
+your-project/
+├── .walph/
+│   ├── config              # Settings (models, thresholds)
+│   ├── PROMPT_plan.md      # Planning prompt (customizable)
+│   ├── PROMPT_build.md     # Building prompt (customizable)
+│   ├── logs/               # Session logs
+│   └── state/              # Circuit breaker state
+├── specs/
+│   └── *.md                # Your requirements (Walph reads all .md files)
+├── AGENTS.md               # Build/test/lint commands
+└── IMPLEMENTATION_PLAN.md  # Task list with checkboxes
+```
+
+## Commands
+
+```bash
+walph                           # Show comprehensive how-to
+walph init <name> [options]     # Create new project
+walph setup [options]           # Add Walph to existing project
+walph plan                      # Generate tasks from specs
+walph build                     # Implement tasks (the main loop)
+walph status                    # Show progress
+walph reset                     # Clear stuck state
+```
+
+### Options
 
 ```
-my-project/
-├── .walph/
-│   ├── config                  # Configuration overrides
-│   ├── logs/                   # Session logs
-│   ├── state/                  # Circuit breaker state
-│   ├── PROMPT_plan.md         # Planning prompt (customizable)
-│   └── PROMPT_build.md        # Building prompt (customizable)
-├── specs/
-│   └── example.md             # Specification files
-├── AGENTS.md                   # Build/test commands for Claude
-├── IMPLEMENTATION_PLAN.md      # Generated/maintained task list
-└── .gitignore
+--max-iterations N    Limit iterations (default: 50)
+--model <name>        Override model (opus, sonnet)
+--monitor             Tmux split with logs + git status
+--dry-run             Show what would run
 ```
+
+## Writing Good Specs
+
+The quality of your specs determines the quality of the output.
+
+**Good spec:**
+```markdown
+## POST /users
+- Request: `{ "email": "user@example.com", "name": "Jane" }`
+- Response: `{ "id": 1, "email": "...", "name": "..." }`
+- Returns 400 if email is invalid or already exists
+- Returns 201 on success
+
+## Files to create
+- `src/routes/users.js` - Route handler
+- `src/services/user-service.js` - Business logic
+- `tests/users.test.js` - Integration tests
+```
+
+**Bad spec:**
+```markdown
+Handle user management with proper validation.
+```
+
+Include: specific endpoints, input/output examples, error cases, files to create.
 
 ## Configuration
 
 ### .walph/config
 
 ```bash
-# Maximum iterations
 MAX_ITERATIONS=50
-
-# Models (use aliases or full names)
 MODEL_PLAN="opus"
 MODEL_BUILD="sonnet"
-
-# Circuit breaker thresholds
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
-CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
 ```
 
 ### Environment Variables
 
 ```bash
 export WALPH_MAX_ITERATIONS=100
-export WALPH_MODEL_PLAN="opus"
-export WALPH_MODEL_BUILD="sonnet"
+export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
 ```
 
-## How It Works
+## Circuit Breaker
 
-### Planning Mode
+Walph automatically stops when Claude appears stuck:
 
-1. Reads all files in `specs/`
-2. Reads existing code and `AGENTS.md`
-3. Performs gap analysis
-4. Generates/updates `IMPLEMENTATION_PLAN.md`
+| Trigger | Threshold | Meaning |
+|---------|-----------|---------|
+| No file changes | 3 iterations | Claude isn't producing code |
+| Same error | 5 times | Stuck on the same problem |
+| No commits | 5 iterations | Tasks aren't completing |
 
-### Building Mode
-
-1. Reads `IMPLEMENTATION_PLAN.md`
-2. Picks first uncompleted task
-3. Implements the task
-4. Runs tests and lint
-5. Marks task complete
-6. Commits changes
-7. Repeats until done or limit reached
-
-### Circuit Breaker
-
-The loop stops automatically when:
-- No file changes for 3 consecutive iterations
-- Same error repeated 5 times
-- No commits for 5 iterations (build mode)
-- Claude signals `WALPH_STUCK`
-
-Reset with: `walph.sh reset`
-
-### Completion Signal
-
-Claude outputs a status block each iteration:
-
-```
-WALPH_STATUS
-completion_level: HIGH
-tasks_remaining: 0
-current_task: All tasks complete
-EXIT_SIGNAL: true
-WALPH_STATUS_END
-```
-
-The loop exits when `completion_level: HIGH` AND `EXIT_SIGNAL: true`.
-
-## Customization
-
-### Custom Prompts
-
-Copy and modify the prompts in `.walph/`:
-- `PROMPT_plan.md` - Planning instructions
-- `PROMPT_build.md` - Building instructions
-
-### AGENTS.md
-
-Tell Claude about your project:
-
-```markdown
-# Project: My App
-
-## Build Commands
-npm run build
-
-## Test Commands
-npm test
-
-## Lint Commands
-npm run lint
-
-## Notes for Claude
-- Use TypeScript strict mode
-- Follow existing patterns in src/
-```
+Reset with `walph reset`, then check your specs for clarity.
 
 ## Tips
 
-1. **Start small**: Begin with detailed specs for a small feature
-2. **Review plans**: Always review `IMPLEMENTATION_PLAN.md` before building
-3. **Iterate**: Run planning multiple times to refine the plan
-4. **Monitor**: Use `--monitor` in tmux for visibility
-5. **Commit often**: The system commits after each task - embrace it
+1. **Start small** - Your first Walph project should be simple
+2. **Review the plan** - Edit `IMPLEMENTATION_PLAN.md` before building if tasks look wrong
+3. **Watch the logs** - `tail -f .walph/logs/*.log`
+4. **Embrace commits** - Each task = one commit. This is good for review and rollback
+5. **Iterate on specs** - If Claude struggles, your specs probably need more detail
 
 ## Troubleshooting
 
-### Circuit Breaker Keeps Triggering
+### Circuit breaker keeps triggering
+- Are specs specific enough? Include examples.
+- Is `AGENTS.md` correct? Try running build/test commands manually.
+- Run `walph reset` to clear state.
 
-```bash
-walph.sh reset
-```
+### Claude keeps making the same mistake
+- Add explicit constraints to your spec
+- Check if there's a conflicting requirement
+- Look at the logs for what Claude is attempting
 
-Then check:
-- Are specs clear enough?
-- Is `AGENTS.md` accurate?
-- Are tests actually passing locally?
+### Rate limit hit
+Walph will prompt you: wait, exit, or continue. Usually best to wait.
 
-### Rate Limit Hit
+## Philosophy
 
-The script will prompt you with options:
-1. Wait and retry
-2. Exit and resume later
-3. Continue anyway
+Walph is built on the idea that **the best AI coding assistant is one that works like a disciplined developer**:
 
-### Claude Stuck
+- Do one thing at a time
+- Test your work
+- Commit your changes
+- Start fresh on the next task
 
-Look for `WALPH_STUCK` in logs. Common causes:
-- Unclear requirements
-- Missing dependencies
-- Conflicting specs
+This approach scales to large projects where context management becomes critical. Instead of fighting context limits, Walph works with them.
 
 ## License
 
@@ -280,4 +247,4 @@ MIT
 
 ## Contributing
 
-Issues and PRs welcome! Please read the specs carefully before implementing.
+Issues and PRs welcome. If you're adding a feature, write a spec first!
