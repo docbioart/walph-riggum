@@ -41,6 +41,12 @@ SETUP_STACK=""
 SETUP_FORCE=false
 
 parse_args() {
+    # No arguments - show comprehensive how-to
+    if [[ $# -eq 0 ]]; then
+        show_howto
+        exit 0
+    fi
+
     # Handle init command specially (it has its own arguments)
     if [[ "${1:-}" == "init" ]]; then
         shift
