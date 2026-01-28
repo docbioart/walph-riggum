@@ -20,6 +20,11 @@ if [[ -f "$INSTALL_DIR/walph-init" ]]; then
     rm -f "$INSTALL_DIR/walph-init"
 fi
 
+if [[ -f "$INSTALL_DIR/jeeroy" ]]; then
+    echo "Removing $INSTALL_DIR/jeeroy..."
+    rm -f "$INSTALL_DIR/jeeroy"
+fi
+
 echo ""
 echo "Uninstallation complete!"
 echo ""

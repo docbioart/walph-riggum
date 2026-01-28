@@ -231,6 +231,65 @@ Reset with `walph reset`, then check your specs for clarity.
 ### Rate limit hit
 Walph will prompt you: wait, exit, or continue. Usually best to wait.
 
+## Jeeroy Lenkins - Document-to-Spec Converter
+
+> "At least I have chicken." - Jeeroy Lenkins
+
+**Jeeroy Lenkins** is a companion tool that converts existing project documentation into Walph-compatible spec files. Got a pile of Word docs, PDFs, or PowerPoints describing what to build? Jeeroy reads them, asks clarifying questions, and generates properly formatted specs.
+
+### How It Works
+
+```
+  Documents (any format)          Walph Specs
+  ┌──────────┐                    ┌──────────┐
+  │ .docx    │                    │ specs/   │
+  │ .pdf     │───▶ Jeeroy ───▶  │ *.md     │───▶ walph plan → build
+  │ .pptx    │    (Claude)        │          │
+  │ .md/.txt │                    └──────────┘
+  └──────────┘
+```
+
+1. **Convert** - Jeeroy converts all documents to markdown (via pandoc)
+2. **Analyze** - Claude reads everything and identifies features, gaps, and questions
+3. **Q&A** - Claude asks you clarifying questions interactively
+4. **Generate** - Produces properly formatted spec files in `specs/`
+5. **LFG** (optional) - Chains directly into `walph setup → plan → build`
+
+### Usage
+
+```bash
+# Basic: analyze docs and generate specs
+jeeroy ./client-docs
+
+# Target a specific project
+jeeroy ./client-docs --project ./my-new-api --stack node
+
+# Full autonomous mode (hold my beer)
+jeeroy ./client-docs --project ./my-new-api --lfg
+
+# Skip questions, just generate best-effort specs
+jeeroy ./client-docs --skip-qa --lfg
+```
+
+### Supported Formats
+
+| Format | Extension | Method |
+|--------|-----------|--------|
+| Markdown | `.md` | Direct read |
+| Plain text | `.txt` | Direct read |
+| Word | `.docx`, `.doc` | Pandoc |
+| PowerPoint | `.pptx`, `.ppt` | Pandoc |
+| PDF | `.pdf` | Pandoc / pdftotext |
+| HTML | `.html`, `.htm` | Pandoc |
+| Rich Text | `.rtf` | Pandoc |
+| OpenDocument | `.odt` | Pandoc |
+| EPUB | `.epub` | Pandoc |
+
+### Requirements
+
+- Claude CLI (required)
+- pandoc (required for non-markdown formats) - `brew install pandoc`
+
 ## Inspiration & Background
 
 Walph Riggum is inspired by the **Ralph Wiggum technique** pioneered by Geoffrey Huntley - a simple bash loop that repeatedly feeds Claude a prompt until completion. The name comes from The Simpsons character who embodies persistent iteration despite setbacks.

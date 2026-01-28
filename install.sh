@@ -36,6 +36,17 @@ EOF
 
 chmod +x "$INSTALL_DIR/walph-init"
 
+# Create jeeroy wrapper
+echo "Installing jeeroy command..."
+
+cat > "$INSTALL_DIR/jeeroy" << EOF
+#!/usr/bin/env bash
+# Jeeroy Lenkins wrapper script
+exec "$SCRIPT_DIR/jeeroy.sh" "\$@"
+EOF
+
+chmod +x "$INSTALL_DIR/jeeroy"
+
 echo ""
 echo "Installation complete!"
 echo ""
@@ -53,3 +64,5 @@ echo "Usage:"
 echo "  walph plan               # Generate implementation plan"
 echo "  walph build              # Start building"
 echo "  walph init my-project    # Initialize new project"
+echo "  jeeroy ./docs            # Convert docs to Walph specs"
+echo "  jeeroy ./docs --lfg      # Convert docs and auto-build"
