@@ -2,6 +2,8 @@
 
 An autonomous coding loop that runs Claude from the *outside* to build software projects with clean context every iteration.
 
+Comes with **[Jeeroy Lenkins](#jeeroy-lenkins---document-to-spec-converter)**, a companion tool that turns any pile of docs (Word, PDF, PowerPoint, markdown, etc.) into Walph-ready specs and optionally kicks off the entire pipeline with a single `--lfg` flag. Docs in, working code out.
+
 > "Me fail English? That's unpossible!" - Walph Riggum
 
 ## Why Walph?
