@@ -1,8 +1,8 @@
 # Walph Riggum - Quick Start Guide
 
-## What Ralph Needs to Run
+## What Walph Needs to Run
 
-Ralph requires **3 things** in your project directory:
+Walph requires **3 things** in your project directory:
 
 ```
 your-project/
@@ -14,15 +14,50 @@ your-project/
 
 ---
 
-## Step 1: Initialize Project
+## Two Ways to Start
+
+### Option A: New Project
+
+Use `init` to create a new project from scratch.
+
+### Option B: Existing Project
+
+Use `setup` to add Walph to a project you already have.
+
+---
+
+## Option A: Initialize New Project
 
 ```bash
 # From the ralphwiggum directory:
-./init.sh my-project --stack node    # or: python, both
+./walph.sh init my-project --stack node    # or: python, swift, kotlin
 
 # This creates the directory structure with templates
 cd my-project
 ```
+
+---
+
+## Option B: Setup Existing Project
+
+```bash
+# Navigate to your project
+cd my-existing-project
+
+# Run setup (auto-detects your stack)
+/path/to/walph.sh setup
+
+# Or specify the stack
+/path/to/walph.sh setup --stack python
+```
+
+Walph will:
+1. Create `.walph/` directory with prompts and config
+2. Create `specs/` directory (if missing)
+3. Create `AGENTS.md` with detected build commands (if missing)
+4. Create `IMPLEMENTATION_PLAN.md` (if missing)
+
+**Important:** Edit `AGENTS.md` to match your actual build/test commands!
 
 ---
 

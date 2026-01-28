@@ -211,7 +211,8 @@ USAGE:
     walph.sh <command> [options]
 
 COMMANDS:
-    init [name]       Initialize a new project (run 'walph.sh init --help' for details)
+    init [name]       Initialize a new project (run 'walph init --help' for details)
+    setup             Add Walph to existing project (run 'walph setup --help' for details)
     plan              Run in planning mode (generates IMPLEMENTATION_PLAN.md)
     build             Run in building mode (implements from plan) [default]
     status            Show current state and progress
@@ -227,16 +228,31 @@ OPTIONS:
     --version             Show version
 
 EXAMPLES:
+    # New project
     walph.sh init my-app --stack node    # Initialize new project
+
+    # Existing project
+    cd my-existing-project
+    walph.sh setup                       # Add Walph to existing project
+
+    # Run Walph
     walph.sh plan                        # Generate implementation plan
     walph.sh build --max-iterations 10   # Build with limited iterations
     walph.sh status                      # Check current progress
 
-WORKFLOW:
+WORKFLOW (new project):
     1. walph.sh init my-app       # Create project structure
     2. Edit specs/TEMPLATE.md     # Write your requirements
     3. walph.sh plan              # Generate task list
     4. walph.sh build             # Implement everything
+
+WORKFLOW (existing project):
+    1. cd my-existing-project
+    2. walph.sh setup             # Add Walph config
+    3. Edit AGENTS.md             # Add build/test commands
+    4. Write specs in specs/      # Define what to build
+    5. walph.sh plan              # Generate task list
+    6. walph.sh build             # Implement everything
 
 For more information, see README.md and QUICKSTART.md
 EOF

@@ -28,7 +28,7 @@ Walph Riggum is a bash-based orchestration tool that runs Claude in an autonomou
 ./install.sh
 ```
 
-This creates `ralph` and `walph-init` commands in `~/bin`.
+This creates `walph` and `walph-init` commands in `~/bin`.
 
 ### Option 2: Direct Usage
 
@@ -38,6 +38,25 @@ Run scripts directly from the repository:
 ./walph.sh plan
 ./walph.sh build
 ```
+
+## Adding Walph to an Existing Project
+
+If you already have a project and want to use Walph:
+
+```bash
+cd your-existing-project
+/path/to/walph.sh setup            # Auto-detects stack
+# or
+/path/to/walph.sh setup --stack python  # Specify stack
+```
+
+This creates:
+- `.walph/` - Configuration and prompts
+- `specs/` - For your requirements (if not exists)
+- `AGENTS.md` - Build/test commands (if not exists)
+- `IMPLEMENTATION_PLAN.md` - Task list (if not exists)
+
+Then edit `AGENTS.md` with your actual build/test commands.
 
 ## Quick Start
 
