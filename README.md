@@ -261,6 +261,22 @@ Walph is built on the idea that **the best AI coding assistant is one that works
 
 This approach scales to large projects where context management becomes critical. Instead of fighting context limits, Walph works with them.
 
+## Security Considerations
+
+**Walph runs Claude with `--dangerously-skip-permissions`**, which means:
+- Claude can read, write, and delete any files in your project
+- Claude can execute any shell commands
+- Claude can make network requests
+
+This is necessary for autonomous operation but means you should:
+
+1. **Review specs carefully** - Claude will do what you ask
+2. **Use on trusted codebases** - Don't run on repos with sensitive credentials
+3. **Run in isolated environments** - Consider Docker or VMs for untrusted projects
+4. **Review commits** - Each task creates a git commit you can inspect
+
+The default Docker credentials (`postgres:postgres`) are for development only. Change them for any real deployment.
+
 ## License
 
 MIT

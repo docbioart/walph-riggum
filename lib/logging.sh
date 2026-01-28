@@ -39,7 +39,7 @@ init_logging() {
     local session_id="$2"
 
     mkdir -p "$log_dir"
-    WALPH_LOG_FILE="$log_dir/ralph_${session_id}.log"
+    WALPH_LOG_FILE="$log_dir/walph_${session_id}.log"
 
     # Write session header
     {

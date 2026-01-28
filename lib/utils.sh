@@ -148,7 +148,7 @@ handle_rate_limit() {
             return 0  # Retry
             ;;
         2)
-            log_info "Exiting. Resume with: ralph build"
+            log_info "Exiting. Resume with: walph build"
             return 2  # Exit
             ;;
         3)
@@ -180,16 +180,21 @@ start_monitor_session() {
         return 1
     fi
 
+    # Escape paths for shell safety (handles quotes and special chars)
+    local escaped_log_file escaped_project_dir
+    escaped_log_file=$(printf '%q' "$log_file")
+    escaped_project_dir=$(printf '%q' "$project_dir")
+
     # Create new tmux session or split existing
     if in_tmux; then
         # Split current pane
-        tmux split-window -h "tail -f '$log_file'"
-        tmux split-window -v "cd '$project_dir' && watch -n 2 'git status --short'"
+        tmux split-window -h "tail -f $escaped_log_file"
+        tmux split-window -v "cd $escaped_project_dir && watch -n 2 'git status --short'"
     else
         # Create new session
-        tmux new-session -d -s ralph-monitor "tail -f '$log_file'"
-        tmux split-window -h -t ralph-monitor "cd '$project_dir' && watch -n 2 'git status --short'"
-        tmux attach -t ralph-monitor
+        tmux new-session -d -s walph-monitor "tail -f $escaped_log_file"
+        tmux split-window -h -t walph-monitor "cd $escaped_project_dir && watch -n 2 'git status --short'"
+        tmux attach -t walph-monitor
     fi
 }
 
