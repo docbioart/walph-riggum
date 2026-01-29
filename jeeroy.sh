@@ -353,37 +353,36 @@ parse_analysis_field() {
 run_qa_session() {
     local converted_content="$1"
     local analysis_output="$2"
-    local output_file="$3"
+    local specs_dir="$3"
 
     log_info "Starting interactive Q&A session..."
+    log_info "Claude will ask clarifying questions. Answer them, or type 'skip' to proceed."
     echo ""
 
     local prompt
     prompt=$(load_prompt_template "PROMPT_jeeroy_qa.md") || return 1
 
-    # Build the full context
-    local temp_prompt
-    temp_prompt=$(make_temp)
+    # Write full context to a file Claude can read
+    local context_file="$PROJECT_DIR/.jeeroy_context.md"
     {
         printf '%s\n' "$prompt"
+        printf '\n---\n\n# Target Directory\n\n'
+        printf 'Write all spec files to: %s/\n\n' "$specs_dir"
         printf '\n---\n\n# Analysis Results\n\n'
         printf '%s\n' "$analysis_output"
         printf '\n---\n\n# Original Documents\n\n'
         printf '%s\n' "$converted_content"
-    } > "$temp_prompt"
+    } > "$context_file"
 
-    # Run Claude in print mode with the full context
-    # For Q&A, we use -p since interactive stdin doesn't work well
-    # when piped. Claude will generate questions AND answers based on
-    # best-effort understanding (similar to skip-qa but with the Q&A prompt).
-    if cat "$temp_prompt" | claude -p \
+    # Run Claude interactively (NOT in print mode)
+    # The initial prompt tells Claude to read the context and begin
+    claude \
         --model "$MODEL" \
         --dangerously-skip-permissions \
-        2>&1 | tee "$output_file"; then
-        :
-    else
-        log_warn "Claude Q&A session ended with non-zero exit"
-    fi
+        "Read the file at $context_file which contains project documentation and instructions for a Jeeroy Lenkins Q&A session. Follow those instructions: summarize what you found, ask clarifying questions ONE AT A TIME (waiting for my response each time), then write the spec files directly to $specs_dir/. Start now."
+
+    # Clean up context file
+    rm -f "$context_file"
 }
 
 # ============================================================================
@@ -724,38 +723,46 @@ main() {
 
     # ── Step 3: Q&A or direct generation ───────────────────────────────────
 
-    local generation_output
+    local specs_dir="$PROJECT_DIR/specs"
+    mkdir -p "$specs_dir"
 
     if [[ "$SKIP_QA" == "true" ]]; then
+        # Non-interactive: Claude outputs with delimiters, we parse and write
+        local generation_output
         generation_output=$(run_direct_generation "$converted_content" "$analysis_output")
+
+        if [[ -z "$generation_output" ]]; then
+            log_error "Spec generation produced no output"
+            exit 1
+        fi
+
+        # Extract and write spec files from delimited output
+        local parsed_count
+        parsed_count=$(extract_and_write_specs "$generation_output" "$specs_dir")
+
+        if [[ "$parsed_count" -eq 0 ]]; then
+            log_warn "No spec files were extracted from Claude's output"
+            log_info "The raw output has been saved. You may need to manually create specs."
+
+            # Save raw output for debugging
+            local raw_output_file="$PROJECT_DIR/jeeroy_raw_output.md"
+            printf '%s\n' "$generation_output" > "$raw_output_file"
+            log_info "Raw output saved to: $raw_output_file"
+            exit 1
+        fi
     else
-        # Q&A runs interactively - output is captured to a temp file
-        # while also being displayed in the terminal (via tee in the function)
-        local qa_output_file
-        qa_output_file=$(make_temp)
-        run_qa_session "$converted_content" "$analysis_output" "$qa_output_file"
-        generation_output=$(cat "$qa_output_file")
+        # Interactive: Claude writes specs directly to disk during the session
+        run_qa_session "$converted_content" "$analysis_output" "$specs_dir"
     fi
 
-    if [[ -z "$generation_output" ]]; then
-        log_error "Spec generation produced no output"
-        exit 1
-    fi
+    # ── Step 4: Count generated spec files ─────────────────────────────────
 
-    # ── Step 4: Extract and write spec files ───────────────────────────────
-
-    local specs_dir="$PROJECT_DIR/specs"
     local spec_count
-    spec_count=$(extract_and_write_specs "$generation_output" "$specs_dir")
+    spec_count=$(find "$specs_dir" -maxdepth 1 -name "*.md" -not -name "README.md" -not -name "TEMPLATE.md" 2>/dev/null | wc -l | tr -d ' ')
 
     if [[ "$spec_count" -eq 0 ]]; then
-        log_warn "No spec files were extracted from Claude's output"
-        log_info "The raw output has been saved. You may need to manually create specs."
-
-        # Save raw output for debugging
-        local raw_output_file="$PROJECT_DIR/jeeroy_raw_output.md"
-        printf '%s\n' "$generation_output" > "$raw_output_file"
-        log_info "Raw output saved to: $raw_output_file"
+        log_warn "No spec files found in $specs_dir/"
+        log_info "You may need to manually create specs or run again."
         exit 1
     fi
 

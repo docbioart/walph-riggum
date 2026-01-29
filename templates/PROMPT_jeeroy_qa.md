@@ -10,8 +10,8 @@ You have been given:
 
 Your job is to:
 1. Present a brief summary of what you understood
-2. Ask clarifying questions to fill in gaps
-3. Generate properly formatted spec files
+2. Ask clarifying questions to fill in gaps (ONE question at a time, wait for user response)
+3. Generate properly formatted spec files and write them directly to disk
 
 ## Phase 1: Present Summary
 
@@ -37,18 +37,31 @@ I'd like to generate these spec files:
 I have a few questions before I generate the specs.
 ```
 
-## Phase 2: Ask Questions
+## Phase 2: Ask Questions (INTERACTIVE)
 
-Ask the questions identified during analysis, one or a few at a time. Keep them conversational and specific. Accept the user's answers and incorporate them.
+**IMPORTANT: This is an interactive session. Ask ONE question at a time and WAIT for the user to respond before asking the next question.**
 
-If the user says "skip" or "just generate", stop asking and proceed with best-effort specs.
+Ask the questions identified during analysis. Keep them conversational and specific. After the user answers, acknowledge their answer and ask the next question.
 
-## Phase 3: Generate Spec Files
+If the user says "skip", "done", or "just generate", stop asking and proceed with best-effort specs.
 
-After Q&A is complete (or skipped), generate each spec file using this exact delimiter format:
-
+Example flow:
 ```
-===SPEC_FILE: filename.md===
+You: What authentication method should be used - JWT tokens, session cookies, or OAuth?
+User: JWT tokens
+You: Got it, JWT tokens. Should the tokens expire, and if so, after how long?
+User: 24 hours
+You: Perfect. One more question: Should there be refresh tokens, or should users re-login after 24 hours?
+...
+```
+
+## Phase 3: Generate Spec Files (WRITE DIRECTLY TO DISK)
+
+After Q&A is complete (or skipped), **write each spec file directly to the specs/ directory**. Do NOT output them to the terminal - use your file writing capability to create the actual files.
+
+Each spec file should follow this format:
+
+```markdown
 # Feature: Feature Name
 
 ## Overview
@@ -104,30 +117,32 @@ After Q&A is complete (or skipped), generate each spec file using this exact del
 
 **Output:**
 [expected result or error]
-===SPEC_FILE_END===
 ```
 
 ## Important Rules
 
-1. **Use the exact delimiters** - `===SPEC_FILE: filename.md===` and `===SPEC_FILE_END===` are required for automated parsing
+1. **Write files directly** - Create the spec files in the specs/ directory using your file writing capability
 2. **One feature per spec** - Don't combine unrelated features
 3. **Be specific** - Include actual endpoint paths, field names, error codes, status codes
 4. **Include examples** - Always provide input/output examples from the docs
 5. **List files to create** - Help Claude know what to build
 6. **Order matters** - Generate foundational specs first (setup, auth) before dependent ones
 
-## Completion Signal
+## Completion
 
-After all spec files are generated, output this block:
+After writing all spec files, summarize what you created:
 
 ```
-===JEEROY_COMPLETE===
-specs_generated: [number of spec files]
-project_type: [api|fullstack|cli|mobile|library|other]
-stack: [node|python|swift|kotlin|go|rust]
-===JEEROY_COMPLETE_END===
+I've created the following spec files in specs/:
+  1. project-setup.md - Project scaffolding
+  2. user-auth.md - Authentication system
+  3. ...
+
+You can now run:
+  walph plan    # Generate implementation plan
+  walph build   # Start building
 ```
 
 ## Begin
 
-Review the documents and analysis below, then start with your summary.
+Review the documents and analysis below. Start with your summary, then ask your first clarifying question and WAIT for the user to respond.
