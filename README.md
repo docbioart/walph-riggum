@@ -77,6 +77,17 @@ Each build iteration is independent. Claude reads the current state from files, 
 - **Customizable prompts**: Modify `.walph/PROMPT_*.md` to change Claude's behavior
 - **Existing project support**: `walph setup` adds Walph to any project
 
+## Requirements
+
+- **Claude CLI** (required) - The Claude Code command-line tool
+- **Git** (required) - For version control and commits
+- **chrome-devtools MCP** (recommended) - For UI testing. Without it, UI testing must be done manually.
+  ```bash
+  # Install via Claude MCP settings - see https://github.com/anthropics/anthropic-quickstarts
+  ```
+
+> **Note:** Walph will warn if chrome-devtools MCP is not available but will continue. UI tasks will need manual verification.
+
 ## Quick Start
 
 ### New Project
@@ -289,8 +300,15 @@ jeeroy ./client-docs --skip-qa --lfg
 
 ### Requirements
 
-- Claude CLI (required)
-- pandoc (required for non-markdown formats) - `brew install pandoc`
+- **Claude CLI** (required)
+- **pandoc** (required for non-markdown formats) - `brew install pandoc`
+- **chrome-devtools MCP** (recommended for UI projects) - For browser-based UI testing
+
+### Architecture Defaults
+
+When designing new projects, Jeeroy defaults to:
+- **Docker-first**: Uses Docker Compose with containerized databases/services
+- **UI testing included**: Specs include E2E testing requirements using chrome-devtools MCP
 
 ## Inspiration & Background
 

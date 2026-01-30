@@ -128,6 +128,22 @@ Each spec file should follow this format:
 5. **List files to create** - Help Claude know what to build
 6. **Order matters** - Generate foundational specs first (setup, auth) before dependent ones
 
+## Architecture Defaults
+
+When designing new projects from scratch:
+
+1. **Docker-First** - Default to Docker containers for all services:
+   - Use Docker Compose for local development
+   - Containerize databases (Postgres, Redis, etc.) rather than requiring local installs
+   - Design with environment variables for configuration
+   - Include health checks and graceful shutdown handling
+
+2. **UI Testing Required** - If the project has a UI (web, mobile, desktop):
+   - Specs MUST include UI/E2E testing requirements
+   - Use chrome-devtools MCP for browser-based testing
+   - Compile success ≠ working UI. Actual browser testing is mandatory.
+   - Include test scenarios that verify UI renders and functions correctly
+
 ## Completion
 
 After writing all spec files, summarize what you created:

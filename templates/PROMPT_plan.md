@@ -81,6 +81,16 @@ Apply these principles when designing the architecture:
 
 3. **YAGNI (You Aren't Gonna Need It)** - Don't plan for hypothetical future features. Only plan what's in the specs.
 
+4. **Docker-First** - For new projects, plan for containerized deployment:
+   - Docker Compose for local development
+   - Containerized databases and services
+   - Environment variable configuration
+
+5. **UI Testing is Mandatory** - If the project has a UI:
+   - Plan for E2E/UI testing tasks using chrome-devtools MCP
+   - Compile success ≠ working UI - actual browser testing required
+   - Include tasks that verify UI renders and functions correctly
+
 ## Guards
 
 1. **NO IMPLEMENTATION** - Do not write any code. Planning only.

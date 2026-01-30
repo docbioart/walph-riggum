@@ -254,6 +254,24 @@ validate_environment() {
         echo "  Install pandoc for docx/pptx/pdf/etc support"
     fi
 
+    # Check chrome-devtools MCP (warn but don't fail - needed for UI testing)
+    local chrome_mcp_found=false
+    if [[ -f "${HOME}/.config/claude/claude_desktop_config.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/.config/claude/claude_desktop_config.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+    if [[ -f "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+
+    if [[ "$chrome_mcp_found" != "true" ]]; then
+        log_warn "chrome-devtools MCP not found - UI testing will require manual verification"
+        echo "  For automated UI testing, configure chrome-devtools MCP"
+    fi
+
     return 0
 }
 

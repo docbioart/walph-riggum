@@ -44,6 +44,23 @@ Extract:
 - Security requirements
 - Environment/deployment details
 
+### Step 3b: Recommend Docker-First Architecture
+
+When designing new projects from scratch, **default to Docker containers**:
+- Recommend Docker Compose for local development
+- Include containerized databases (Postgres, Redis, etc.) rather than local installs
+- Design services to be container-ready with proper environment variable configuration
+- Include health checks and proper startup/shutdown handling
+- This ensures consistent environments and easier deployment
+
+### Step 3c: Plan for UI Testing
+
+If the project has any user interface (web, mobile, desktop):
+- Include UI/E2E testing requirements in the spec
+- Recommend using chrome-devtools MCP for browser testing
+- Note that compile/build success does NOT mean the UI works - actual browser testing is required
+- Plan for test scenarios that verify the UI actually renders and functions correctly
+
 ### Step 4: Find Gaps and Ambiguities
 
 Identify what's missing or unclear:

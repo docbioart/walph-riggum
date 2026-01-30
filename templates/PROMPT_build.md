@@ -59,6 +59,27 @@ If tests fail:
 
 If you cannot fix after 3 attempts, document the issue and move on.
 
+### UI Testing (Critical)
+
+**Compile success does NOT mean the UI works!** If your task involves UI:
+
+1. **Use chrome-devtools MCP** to test the UI in an actual browser
+2. Navigate to the relevant page/component
+3. Take a snapshot to verify elements render correctly
+4. Click buttons, fill forms, verify interactions work
+5. Check for console errors
+
+Example chrome-devtools workflow:
+```
+1. mcp__chrome-devtools__navigate_page to your dev server URL
+2. mcp__chrome-devtools__take_snapshot to see the page state
+3. mcp__chrome-devtools__click on interactive elements
+4. mcp__chrome-devtools__fill for form inputs
+5. mcp__chrome-devtools__list_console_messages to check for errors
+```
+
+Do not mark UI tasks complete without verifying the UI actually works in a browser.
+
 ## Phase 4: Update Plan & Commit
 
 1. **Update IMPLEMENTATION_PLAN.md**: Mark your task as complete

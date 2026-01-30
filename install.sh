@@ -10,6 +10,59 @@ echo "Walph Riggum Installer"
 echo "======================"
 echo ""
 
+# Check dependencies
+echo "Checking dependencies..."
+echo ""
+
+# Required: Claude CLI
+if command -v claude &> /dev/null; then
+    echo "✓ Claude CLI found"
+else
+    echo "✗ Claude CLI not found (required)"
+    echo "  Install from: https://github.com/anthropics/claude-code"
+    exit 1
+fi
+
+# Required: Git
+if command -v git &> /dev/null; then
+    echo "✓ Git found"
+else
+    echo "✗ Git not found (required)"
+    exit 1
+fi
+
+# Optional: pandoc (for Jeeroy document conversion)
+if command -v pandoc &> /dev/null; then
+    echo "✓ pandoc found"
+else
+    echo "⚠ pandoc not found (optional - needed for docx/pdf conversion)"
+    echo "  Install: brew install pandoc"
+fi
+
+# Optional: chrome-devtools MCP (for UI testing)
+# We check if the MCP is configured by looking for it in Claude's config
+CHROME_MCP_FOUND=false
+if [[ -f "${HOME}/.config/claude/claude_desktop_config.json" ]]; then
+    if grep -q "chrome-devtools" "${HOME}/.config/claude/claude_desktop_config.json" 2>/dev/null; then
+        CHROME_MCP_FOUND=true
+    fi
+fi
+if [[ -f "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" ]]; then
+    if grep -q "chrome-devtools" "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" 2>/dev/null; then
+        CHROME_MCP_FOUND=true
+    fi
+fi
+
+if [[ "$CHROME_MCP_FOUND" == "true" ]]; then
+    echo "✓ chrome-devtools MCP found"
+else
+    echo "⚠ chrome-devtools MCP not found (recommended for UI testing)"
+    echo "  Without it, UI testing must be done manually."
+    echo "  See: https://github.com/anthropics/anthropic-quickstarts"
+fi
+
+echo ""
+
 # Create install directory if needed
 if [[ ! -d "$INSTALL_DIR" ]]; then
     echo "Creating $INSTALL_DIR..."
