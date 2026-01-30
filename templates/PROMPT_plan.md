@@ -71,12 +71,23 @@ Each task should:
 - List files that will be created/modified
 - Note any blockers or dependencies on other tasks
 
+## Design Principles
+
+Apply these principles when designing the architecture:
+
+1. **DRY (Don't Repeat Yourself)** - Identify shared patterns and plan for reusable components. If similar logic appears in multiple places, plan a shared utility or base class.
+
+2. **KISS (Keep It Simple, Stupid)** - Prefer simple, straightforward solutions over clever ones. Avoid over-engineering. The simplest approach that meets requirements is usually best.
+
+3. **YAGNI (You Aren't Gonna Need It)** - Don't plan for hypothetical future features. Only plan what's in the specs.
+
 ## Guards
 
 1. **NO IMPLEMENTATION** - Do not write any code. Planning only.
 2. **SEARCH BEFORE ASSUMING** - Don't assume something is missing. Search first.
 3. **RESPECT EXISTING CODE** - Plan around existing architecture, don't propose rewrites unless necessary.
 4. **BE SPECIFIC** - Vague tasks like "implement authentication" are not helpful. Break them down.
+5. **AVOID OVER-ENGINEERING** - Don't add abstraction layers, config options, or flexibility that isn't in the specs.
 
 ## Output
 

@@ -33,6 +33,14 @@ Write the code for your selected task:
 3. Add appropriate error handling
 4. Include comments only where logic is non-obvious
 
+### Code Quality Principles
+
+- **DRY (Don't Repeat Yourself)** - Before writing new code, check if similar logic exists. Extract shared code into reusable functions/modules. Never copy-paste code blocks.
+
+- **KISS (Keep It Simple, Stupid)** - Write the simplest code that works. Avoid clever tricks, premature optimization, or unnecessary abstraction. If a simple approach works, use it.
+
+- **No Over-Engineering** - Don't add features, config options, or flexibility not in the specs. Don't create abstractions for single-use cases. Three similar lines are better than a premature helper function.
+
 ## Phase 3: Test & Lint
 
 Run the test and lint commands from AGENTS.md:
@@ -66,9 +74,11 @@ If you cannot fix after 3 attempts, document the issue and move on.
 
 1. **ONE TASK ONLY** - Do not implement multiple tasks in one iteration
 2. **TEST BEFORE COMMIT** - Never commit code that fails tests
-3. **NO UNNECESSARY CHANGES** - Don't refactor unrelated code
+3. **NO UNNECESSARY CHANGES** - Don't refactor unrelated code or add "improvements" not in the task
 4. **DOCUMENT THE WHY** - Add a brief note if you made architectural decisions
 5. **STUCK SIGNAL** - If truly stuck after multiple attempts, output `RALPH_STUCK` and explain why
+6. **KISS OVER CLEVER** - Simple, readable code beats clever, compact code. Optimize for understanding.
+7. **DRY CHECK** - Before adding new code, search for existing similar patterns to reuse
 
 ## Output
 
