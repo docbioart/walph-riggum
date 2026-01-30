@@ -324,6 +324,7 @@ The original Ralph Wiggum approach uses a Stop hook to intercept Claude's exit a
 
 ### Further Reading
 
+- [From Client Docs to Working Code](https://medium.com/@artmorales/from-client-docs-to-working-code-building-software-with-walph-and-jeeroy-56a1ba1718c3) - Blog post on how Walph and Jeeroy work together
 - [Original Reddit breakdown](https://www.reddit.com/r/ClaudeAI/comments/1qlqaub/my_ralph_wiggum_breakdown_just_got_endorsed_as/) - The post that inspired this project
 - [Ralph Wiggum on Awesome Claude](https://awesomeclaude.ai/ralph-wiggum) - Community resources
 - [11 Tips for AI Coding with Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) - Practical guidance

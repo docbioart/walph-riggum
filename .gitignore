@@ -1,0 +1,9 @@
+# Blog drafts
+BLOG_POST.md
+*.docx
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
