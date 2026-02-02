@@ -51,6 +51,7 @@ When designing new projects from scratch, **default to Docker containers**:
 - Include containerized databases (Postgres, Redis, etc.) rather than local installs
 - Design services to be container-ready with proper environment variable configuration
 - Include health checks and proper startup/shutdown handling
+- **Never assume default ports are available** - All exposed ports must be configurable via environment variables (e.g., `${DB_PORT:-5432}:5432`). Common ports like 3000, 5432, 8080, 6379 are often already in use on developer machines.
 - This ensures consistent environments and easier deployment
 
 ### Step 3c: Plan for UI Testing
@@ -60,6 +61,19 @@ If the project has any user interface (web, mobile, desktop):
 - Recommend using chrome-devtools MCP for browser testing
 - Note that compile/build success does NOT mean the UI works - actual browser testing is required
 - Plan for test scenarios that verify the UI actually renders and functions correctly
+
+### Step 3d: Environment Configuration
+
+**Never design for hardcoded configuration.** Always plan for environment variables:
+- All server addresses, API URLs, hostnames → environment variables
+- All API keys, tokens, secrets → environment variables
+- All database connection strings → environment variables
+- All port numbers and environment-specific values → environment variables
+
+Include in your analysis:
+- What environment variables will be needed
+- Recommend a spec task for creating `.env.example` with documented placeholders
+- Note that `.env` must be in `.gitignore` (secrets never committed)
 
 ### Step 4: Find Gaps and Ambiguities
 

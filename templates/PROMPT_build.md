@@ -41,6 +41,67 @@ Write the code for your selected task:
 
 - **No Over-Engineering** - Don't add features, config options, or flexibility not in the specs. Don't create abstractions for single-use cases. Three similar lines are better than a premature helper function.
 
+### Environment Configuration (Critical)
+
+**NEVER hardcode any of the following in source code:**
+- Server addresses, hostnames, or URLs (API endpoints, database hosts, etc.)
+- API keys, tokens, or secrets
+- Database connection strings, usernames, or passwords
+- Port numbers
+- Environment-specific values (dev/staging/prod)
+
+**Always use environment variables via `.env` file:**
+
+1. **Read from environment** - Use `process.env.VAR_NAME` (Node), `os.environ['VAR_NAME']` (Python), etc.
+2. **Provide defaults only for non-sensitive values** - e.g., `process.env.PORT || 3000` is OK, but never default API keys
+3. **Create/update `.env.example`** - Include all required variables with placeholder values and comments
+4. **Never commit `.env`** - Ensure `.gitignore` includes `.env` (but NOT `.env.example`)
+
+Example `.env.example`:
+```bash
+# Server Configuration
+PORT=3000
+HOST=localhost
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+
+# External APIs
+API_KEY=your-api-key-here
+API_BASE_URL=https://api.example.com
+
+# Environment
+NODE_ENV=development
+```
+
+If you find hardcoded values in existing code, refactor them to use environment variables as part of your task.
+
+### Docker Port Configuration (Critical)
+
+**Never assume default ports are available.** Common ports (3000, 5432, 8080, 6379, etc.) are often already in use.
+
+1. **Always use environment variables for ports** in `docker-compose.yml`:
+   ```yaml
+   ports:
+     - "${APP_PORT:-3000}:3000"
+     - "${DB_PORT:-5432}:5432"
+   ```
+
+2. **Check for port conflicts before starting** - If a container fails to start, check if the port is in use:
+   ```bash
+   lsof -i :<port>  # macOS/Linux
+   ```
+
+3. **Document all ports in `.env.example`**:
+   ```bash
+   # Ports (change if defaults conflict with existing services)
+   APP_PORT=3000
+   DB_PORT=5432
+   REDIS_PORT=6379
+   ```
+
+4. **Use non-standard defaults when sensible** - Consider using less common ports (e.g., 3001, 5433) to reduce conflicts
+
 ## Phase 3: Test & Lint
 
 Run the test and lint commands from AGENTS.md:

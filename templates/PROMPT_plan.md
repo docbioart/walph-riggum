@@ -85,8 +85,16 @@ Apply these principles when designing the architecture:
    - Docker Compose for local development
    - Containerized databases and services
    - Environment variable configuration
+   - **Never assume default ports are available** - All container ports must be configurable via environment variables (e.g., `${APP_PORT:-3000}:3000`). Common ports like 3000, 5432, 8080, 6379 are often in use.
 
-5. **UI Testing is Mandatory** - If the project has a UI:
+5. **Environment Configuration** - Never plan for hardcoded configuration:
+   - All server addresses, API URLs, and hostnames must come from environment variables
+   - All API keys, tokens, and secrets must come from environment variables
+   - All database connection strings must come from environment variables
+   - Plan a task to create `.env.example` with all required variables documented
+   - Ensure `.gitignore` includes `.env` (never commit secrets)
+
+6. **UI Testing is Mandatory** - If the project has a UI:
    - Plan for E2E/UI testing tasks using chrome-devtools MCP
    - Compile success ≠ working UI - actual browser testing required
    - Include tasks that verify UI renders and functions correctly
