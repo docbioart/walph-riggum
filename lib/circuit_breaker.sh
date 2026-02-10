@@ -55,9 +55,9 @@ check_file_changes() {
     local last_hash
     last_hash=$(_read_state "last_git_hash")
 
-    # Check working directory changes
+    # Check working directory changes (exclude .walph/state/ to avoid self-resets)
     local working_changes
-    working_changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    working_changes=$(git status --porcelain 2>/dev/null | grep -v '\.walph/state/' | wc -l | tr -d ' ')
 
     if [[ "$current_hash" != "$last_hash" ]] || [[ "$working_changes" -gt 0 ]]; then
         return 0  # Changes detected
@@ -80,13 +80,14 @@ check_error_pattern() {
 # Check for explicit stuck signal from Claude
 check_stuck_signal() {
     local output="$1"
-    if echo "$output" | grep -q "WALPH_STUCK"; then
+    if echo "$output" | grep -q "WALPH_STUCK\|RALPH_STUCK"; then
         return 0  # Stuck signal found
     fi
     return 1  # No stuck signal
 }
 
-# Check if there have been commits recently
+# Check if there have been meaningful commits recently
+# Commits that only touch .walph/state/ are not counted (avoids self-resets)
 check_commit_activity() {
     local current_hash
     current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
@@ -94,7 +95,16 @@ check_commit_activity() {
     last_hash=$(_read_state "last_git_hash")
 
     if [[ "$current_hash" != "$last_hash" ]]; then
-        return 0  # New commit
+        # Verify the commit touched files outside .walph/state/
+        local meaningful_files
+        meaningful_files=$(git diff --name-only "$last_hash" "$current_hash" 2>/dev/null | grep -v '\.walph/state/' | wc -l | tr -d ' ')
+        if [[ "$meaningful_files" -gt 0 ]]; then
+            return 0  # New meaningful commit
+        fi
+        # Commit only touched state files — don't count it, but update hash
+        # so we don't re-check this same commit range next iteration
+        _update_state "last_git_hash" "$current_hash"
+        return 1  # No meaningful commit
     fi
     return 1  # No new commit
 }

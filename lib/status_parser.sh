@@ -24,7 +24,13 @@ extract_status_block() {
     local output="$1"
 
     # Use sed to extract between markers
-    echo "$output" | sed -n '/WALPH_STATUS$/,/WALPH_STATUS_END/p' 2>/dev/null
+    # Support both RALPH_STATUS (prompt template convention) and WALPH_STATUS (legacy)
+    local block
+    block=$(echo "$output" | sed -n '/RALPH_STATUS$/,/RALPH_STATUS_END/p' 2>/dev/null)
+    if [[ -z "$block" ]]; then
+        block=$(echo "$output" | sed -n '/WALPH_STATUS$/,/WALPH_STATUS_END/p' 2>/dev/null)
+    fi
+    echo "$block"
 }
 
 # Parse a field from status block
