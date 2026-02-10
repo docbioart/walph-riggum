@@ -15,6 +15,18 @@ PANDOC_EXTENSIONS=("docx" "doc" "pptx" "ppt" "rtf" "html" "htm" "odt" "epub")
 # PDF needs special handling (pandoc or pdftotext fallback)
 PDF_EXTENSIONS=("pdf")
 
+# Image files (referenced for Claude vision in interactive mode)
+IMAGE_EXTENSIONS=("jpg" "jpeg" "png" "gif" "webp" "svg")
+
+# Code/config files (read directly, wrapped in code fences)
+CODE_EXTENSIONS=("js" "jsx" "ts" "tsx" "py" "rb" "java" "kt" "swift" "go" "rs"
+    "c" "cpp" "h" "hpp" "cs" "php" "sh" "bash" "zsh" "sql"
+    "json" "yaml" "yml" "toml" "xml" "csv" "env" "ini" "cfg" "conf"
+    "dockerfile" "makefile" "r" "scala" "lua" "pl" "ex" "exs" "vue" "svelte")
+
+# Archive files (extracted and recursively processed)
+ZIP_EXTENSIONS=("zip")
+
 # ============================================================================
 # DEPENDENCY CHECKS
 # ============================================================================
@@ -47,6 +59,30 @@ check_pdftotext() {
     command -v pdftotext &>/dev/null
 }
 
+check_unzip() {
+    if command -v unzip &>/dev/null; then
+        return 0
+    fi
+
+    log_error "unzip is not installed."
+    echo ""
+    echo "Install unzip:"
+    case "$(uname -s)" in
+        Darwin)
+            echo "  brew install unzip"
+            ;;
+        Linux)
+            echo "  sudo apt-get install unzip    # Debian/Ubuntu"
+            echo "  sudo dnf install unzip        # Fedora"
+            echo "  sudo pacman -S unzip           # Arch"
+            ;;
+        *)
+            echo "  Install unzip for your platform"
+            ;;
+    esac
+    return 1
+}
+
 # ============================================================================
 # FORMAT DETECTION
 # ============================================================================
@@ -71,6 +107,29 @@ extension_in_list() {
     return 1
 }
 
+# Map file extension to markdown code fence language name
+ext_to_lang() {
+    local ext="$1"
+    case "$ext" in
+        js|jsx)      echo "javascript" ;;
+        ts|tsx)      echo "typescript" ;;
+        py)          echo "python" ;;
+        rb)          echo "ruby" ;;
+        kt)          echo "kotlin" ;;
+        rs)          echo "rust" ;;
+        c|h)         echo "c" ;;
+        cpp|hpp)     echo "cpp" ;;
+        cs)          echo "csharp" ;;
+        sh|bash|zsh) echo "bash" ;;
+        yml)         echo "yaml" ;;
+        ex|exs)      echo "elixir" ;;
+        pl)          echo "perl" ;;
+        dockerfile)  echo "dockerfile" ;;
+        makefile)    echo "makefile" ;;
+        *)           echo "$ext" ;;
+    esac
+}
+
 # Check if a file is a supported format
 is_supported_file() {
     local file="$1"
@@ -80,6 +139,9 @@ is_supported_file() {
     extension_in_list "$ext" "${DIRECT_READ_EXTENSIONS[@]}" && return 0
     extension_in_list "$ext" "${PANDOC_EXTENSIONS[@]}" && return 0
     extension_in_list "$ext" "${PDF_EXTENSIONS[@]}" && return 0
+    extension_in_list "$ext" "${IMAGE_EXTENSIONS[@]}" && return 0
+    extension_in_list "$ext" "${CODE_EXTENSIONS[@]}" && return 0
+    extension_in_list "$ext" "${ZIP_EXTENSIONS[@]}" && return 0
     return 1
 }
 
@@ -89,6 +151,9 @@ get_supported_extensions_display() {
     all+=("${DIRECT_READ_EXTENSIONS[@]}")
     all+=("${PANDOC_EXTENSIONS[@]}")
     all+=("${PDF_EXTENSIONS[@]}")
+    all+=("${IMAGE_EXTENSIONS[@]}")
+    all+=("${CODE_EXTENSIONS[@]}")
+    all+=("${ZIP_EXTENSIONS[@]}")
     local IFS=", "
     echo "${all[*]}"
 }
@@ -154,6 +219,54 @@ convert_file() {
         log_warn "Cannot convert PDF: $filename (install pandoc or pdftotext)" >&2
         printf '%s\n' "[PDF file: $filename - could not be converted]"
         return 1
+    fi
+
+    # Image files: output a reference marker (Claude vision can read these in interactive mode)
+    if extension_in_list "$ext" "${IMAGE_EXTENSIONS[@]}"; then
+        local abs_path
+        abs_path=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
+        printf '[IMAGE FILE: %s]\n' "$filename"
+        printf 'Location: %s\n' "$abs_path"
+        printf 'This is an image file. If you have file access, examine it visually for\n'
+        printf 'diagrams, wireframes, screenshots, or other visual requirements.\n'
+        return 0
+    fi
+
+    # Code/config files: read directly, wrap in fenced code block
+    if extension_in_list "$ext" "${CODE_EXTENSIONS[@]}"; then
+        local lang
+        lang=$(ext_to_lang "$ext")
+        printf '```%s\n' "$lang"
+        cat "$file"
+        printf '\n```\n'
+        return 0
+    fi
+
+    # ZIP archives: extract to temp dir, recursively process contents
+    if extension_in_list "$ext" "${ZIP_EXTENSIONS[@]}"; then
+        if ! check_unzip 2>/dev/null; then
+            log_warn "unzip not installed, skipping: $filename" >&2
+            printf '[Archive: %s - requires unzip to extract]\n' "$filename"
+            return 1
+        fi
+
+        local temp_dir
+        temp_dir=$(mktemp -d)
+        # Track temp dir for cleanup (append to global list)
+        _CONVERTER_TEMP_DIRS="${_CONVERTER_TEMP_DIRS:-} $temp_dir"
+
+        if unzip -q -o "$file" -d "$temp_dir" 2>/dev/null; then
+            log_debug "Extracted $filename to temp dir" >&2
+            convert_directory "$temp_dir" "true"
+            local rc=$?
+            rm -rf "$temp_dir"
+            return $rc
+        else
+            log_warn "Failed to extract: $filename" >&2
+            printf '[Archive: %s - extraction failed]\n' "$filename"
+            rm -rf "$temp_dir"
+            return 1
+        fi
     fi
 
     # Pandoc conversion for everything else
@@ -264,6 +377,9 @@ get_conversion_summary() {
     local docx_count=0
     local pdf_count=0
     local pptx_count=0
+    local image_count=0
+    local code_count=0
+    local zip_count=0
     local other_count=0
     local unsupported_count=0
 
@@ -285,6 +401,12 @@ get_conversion_summary() {
             esac
         elif extension_in_list "$ext" "${PDF_EXTENSIONS[@]}"; then
             pdf_count=$((pdf_count + 1))
+        elif extension_in_list "$ext" "${IMAGE_EXTENSIONS[@]}"; then
+            image_count=$((image_count + 1))
+        elif extension_in_list "$ext" "${CODE_EXTENSIONS[@]}"; then
+            code_count=$((code_count + 1))
+        elif extension_in_list "$ext" "${ZIP_EXTENSIONS[@]}"; then
+            zip_count=$((zip_count + 1))
         else
             unsupported_count=$((unsupported_count + 1))
         fi
@@ -296,6 +418,9 @@ get_conversion_summary() {
     if [[ $docx_count -gt 0 ]]; then echo "  Word: $docx_count"; fi
     if [[ $pdf_count -gt 0 ]]; then echo "  PDF: $pdf_count"; fi
     if [[ $pptx_count -gt 0 ]]; then echo "  PowerPoint: $pptx_count"; fi
+    if [[ $image_count -gt 0 ]]; then echo "  Images: $image_count"; fi
+    if [[ $code_count -gt 0 ]]; then echo "  Code/Config: $code_count"; fi
+    if [[ $zip_count -gt 0 ]]; then echo "  Archives (ZIP): $zip_count"; fi
     if [[ $other_count -gt 0 ]]; then echo "  Other supported: $other_count"; fi
     if [[ $unsupported_count -gt 0 ]]; then echo "  Unsupported (skipped): $unsupported_count"; fi
 }

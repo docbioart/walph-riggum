@@ -114,11 +114,27 @@ get_status_summary() {
 # ============================================================================
 
 # Check for rate limit error in output
+# Matches actual Claude CLI/API error patterns, not arbitrary content
 check_rate_limit() {
     local output="$1"
 
-    if echo "$output" | grep -qi "rate.limit\|429\|too.many.requests\|5-hour"; then
-        return 0  # Rate limited
+    # Match specific error patterns from the Claude CLI:
+    #   - "rate_limit_error" (API error type)
+    #   - "Error: 429" (HTTP status from CLI)
+    #   - "usage limit reached" (Claude Code billing cap message)
+    #   - "too many requests" only when near "429" or "error" context
+    #   - "Your limit will reset at" (Claude Code usage cap message)
+    if echo "$output" | grep -q "rate_limit_error"; then
+        return 0
+    fi
+    if echo "$output" | grep -q "Error: 429"; then
+        return 0
+    fi
+    if echo "$output" | grep -qi "usage limit reached"; then
+        return 0
+    fi
+    if echo "$output" | grep -qi "Your limit will reset at"; then
+        return 0
     fi
     return 1  # Not rate limited
 }

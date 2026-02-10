@@ -104,6 +104,9 @@ SUPPORTED FORMATS:
     Direct read:    .md, .txt
     Via pandoc:     .docx, .doc, .pptx, .ppt, .rtf, .html, .odt, .epub
     PDF:            .pdf (pandoc or pdftotext)
+    Images:         .jpg, .jpeg, .png, .gif, .webp, .svg (file reference)
+    Code/Config:    .js, .ts, .py, .rb, .go, .rs, .json, .yaml, etc.
+    Archives:       .zip (extract and process contents)
 
 WORKFLOW:
     1. Reads all documents in the provided directory

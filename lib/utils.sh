@@ -130,21 +130,59 @@ ask_choice() {
 # ============================================================================
 
 # Handle rate limit with user interaction
+# Args: [claude_output] - optional raw output from Claude for detail extraction
 handle_rate_limit() {
+    local claude_output="${1:-}"
+    local delay="${RATE_LIMIT_RETRY_DELAY:-60}"
+
     echo ""
     log_warn "API rate limit detected"
     echo ""
+    echo "  The Claude API returned a rate limit error (HTTP 429). This means either:"
+    echo "  - You've hit your per-minute request/token limit (wait and retry)"
+    echo "  - You've reached your plan's usage cap (resets on a timer)"
+    echo ""
+
+    # Try to extract the specific error message from Claude's output
+    if [[ -n "$claude_output" ]]; then
+        local detail=""
+        # Look for the structured API error message first
+        detail=$(printf '%s\n' "$claude_output" | grep -o '"message":"[^"]*"' | head -1 | sed 's/"message":"//;s/"$//')
+        # Fall back to the CLI usage limit message
+        if [[ -z "$detail" ]]; then
+            detail=$(printf '%s\n' "$claude_output" | grep -i "usage limit reached\|Your limit will reset at\|Error: 429" | head -1)
+        fi
+        if [[ -n "$detail" ]]; then
+            echo "  Error detail: $detail"
+            echo ""
+        fi
+    fi
+
+    # Show context if available
+    if [[ -n "${MODEL_BUILD:-}" ]]; then
+        echo "  Model: ${MODEL_BUILD}"
+    fi
+    if [[ -n "${WALPH_CURRENT_ITERATION:-}" ]]; then
+        echo "  Iteration: ${WALPH_CURRENT_ITERATION}/${MAX_ITERATIONS:-?}"
+    fi
+    if [[ -n "${MODEL_BUILD:-}${WALPH_CURRENT_ITERATION:-}" ]]; then
+        echo ""
+    fi
+
+    echo "  Your progress is safe — all completed tasks have been committed."
+    echo "  You can resume exactly where you left off with 'walph build'."
+    echo ""
     echo "Options:"
-    echo "  1. Wait and retry (will wait ${RATE_LIMIT_RETRY_DELAY:-60} seconds)"
-    echo "  2. Exit and resume later"
-    echo "  3. Continue anyway (may fail)"
+    echo "  1. Wait and retry (will wait ${delay} seconds)"
+    echo "  2. Exit and resume later (recommended)"
+    echo "  3. Continue anyway (will likely fail again)"
     echo ""
 
     read -r -p "Choose [1/2/3]: " choice
     case "$choice" in
         1)
-            log_info "Waiting ${RATE_LIMIT_RETRY_DELAY:-60} seconds before retry..."
-            sleep "${RATE_LIMIT_RETRY_DELAY:-60}"
+            log_info "Waiting ${delay} seconds before retry..."
+            sleep "$delay"
             return 0  # Retry
             ;;
         2)

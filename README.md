@@ -286,17 +286,20 @@ jeeroy ./client-docs --skip-qa --lfg
 
 ### Supported Formats
 
-| Format       | Extension       | Method              |
-|--------------|-----------------|---------------------|
-| Markdown     | `.md`           | Direct read         |
-| Plain text   | `.txt`          | Direct read         |
-| Word         | `.docx`, `.doc` | Pandoc              |
-| PowerPoint   | `.pptx`, `.ppt` | Pandoc              |
-| PDF          | `.pdf`          | Pandoc / pdftotext  |
-| HTML         | `.html`, `.htm` | Pandoc              |
-| Rich Text    | `.rtf`          | Pandoc              |
-| OpenDocument | `.odt`          | Pandoc              |
-| EPUB         | `.epub`         | Pandoc              |
+| Format       | Extension                    | Method                       |
+|--------------|------------------------------|------------------------------|
+| Markdown     | `.md`                        | Direct read                  |
+| Plain text   | `.txt`                       | Direct read                  |
+| Word         | `.docx`, `.doc`              | Pandoc                       |
+| PowerPoint   | `.pptx`, `.ppt`              | Pandoc                       |
+| PDF          | `.pdf`                       | Pandoc / pdftotext           |
+| HTML         | `.html`, `.htm`              | Pandoc                       |
+| Rich Text    | `.rtf`                       | Pandoc                       |
+| OpenDocument | `.odt`                       | Pandoc                       |
+| EPUB         | `.epub`                      | Pandoc                       |
+| Images       | `.jpg`, `.png`, `.gif`, etc. | File reference (Claude vision) |
+| Code         | `.js`, `.py`, `.ts`, etc.    | Direct read (fenced)         |
+| Archives     | `.zip`                       | Extract and process contents |
 
 ### Requirements
 

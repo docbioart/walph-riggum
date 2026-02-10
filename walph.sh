@@ -1379,7 +1379,7 @@ run_iteration() {
 
     # Check for rate limit
     if check_rate_limit "$output"; then
-        handle_rate_limit
+        handle_rate_limit "$output"
         local rate_limit_choice=$?
         if [[ $rate_limit_choice -eq 2 ]]; then
             return 2  # Exit signal
@@ -1444,7 +1444,8 @@ main_loop() {
             model=$(get_model_for_mode "$MODE")
         fi
 
-        # Run iteration
+        # Run iteration (export for rate limit context)
+        WALPH_CURRENT_ITERATION="$iteration"
         local result
         if run_iteration "$iteration" "$prompt_file" "$model"; then
             # Check if we got completion signal
