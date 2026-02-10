@@ -20,6 +20,9 @@ CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
 # Rate limit handling
 RATE_LIMIT_RETRY_DELAY=60  # seconds
 
+# Iteration timeout (kill Claude if it hangs longer than this)
+DEFAULT_ITERATION_TIMEOUT=900  # 15 minutes
+
 # ============================================================================
 # CONFIGURATION LOADING
 # ============================================================================
@@ -41,6 +44,7 @@ load_config() {
     MODEL_BUILD="${WALPH_MODEL_BUILD:-${MODEL_BUILD:-$DEFAULT_MODEL_BUILD}}"
     LOG_DIR="${WALPH_LOG_DIR:-${LOG_DIR:-$DEFAULT_LOG_DIR}}"
     STATE_DIR="${WALPH_STATE_DIR:-${STATE_DIR:-$DEFAULT_STATE_DIR}}"
+    ITERATION_TIMEOUT="${WALPH_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$DEFAULT_ITERATION_TIMEOUT}}"
 }
 
 # Get the model for a given mode
@@ -87,5 +91,8 @@ write_default_config() {
 # CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 # CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
 # CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
+
+# Iteration timeout in seconds (kills Claude if it hangs)
+# ITERATION_TIMEOUT=900  # 15 minutes
 EOF
 }

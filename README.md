@@ -200,6 +200,7 @@ MODEL_BUILD="sonnet"
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
 CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
+ITERATION_TIMEOUT=900  # 15 minutes; kills Claude if it hangs
 ```
 
 ### Environment Variables
@@ -207,6 +208,7 @@ CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
 ```bash
 export WALPH_MAX_ITERATIONS=100
 export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
+export WALPH_ITERATION_TIMEOUT=1200  # 20 minutes per iteration
 ```
 
 ## Circuit Breaker

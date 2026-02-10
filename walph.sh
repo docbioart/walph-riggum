@@ -1352,27 +1352,66 @@ run_iteration() {
     fi
 
     # Run Claude
-    log_info "Running Claude ($model)..."
+    local timeout="${ITERATION_TIMEOUT:-900}"
+    log_info "Running Claude ($model)... (timeout: ${timeout}s)"
 
     local output
     local exit_code=0
 
-    # Create temp file for output
+    # Create temp files for prompt input and output capture
+    local temp_prompt
+    temp_prompt=$(mktemp)
+    printf '%s' "$full_prompt" > "$temp_prompt"
+
     local temp_output
     temp_output=$(mktemp)
 
-    # Run Claude with streaming, capture output
-    if echo "$full_prompt" | claude -p \
+    # Run Claude in the background with a timeout watchdog.
+    # Using a temp file for input (not pipe) ensures clean EOF delivery.
+    # The background PID lets us kill it if it exceeds the timeout.
+    claude -p \
         --dangerously-skip-permissions \
         --model "$model" \
-        2>&1 | tee "$temp_output"; then
-        exit_code=0
-    else
+        < "$temp_prompt" \
+        > "$temp_output" 2>&1 &
+    local claude_pid=$!
+
+    # Watchdog: wait up to $timeout seconds for Claude to finish
+    local elapsed=0
+    while kill -0 "$claude_pid" 2>/dev/null; do
+        if [[ $elapsed -ge $timeout ]]; then
+            log_warn "Claude has been running for ${timeout}s — killing stuck process"
+            kill "$claude_pid" 2>/dev/null
+            # Give it a moment to die, then force-kill
+            sleep 2
+            kill -9 "$claude_pid" 2>/dev/null
+            wait "$claude_pid" 2>/dev/null
+            exit_code=124  # Same exit code as GNU timeout
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+
+    # If it exited on its own, collect the real exit code
+    if [[ $exit_code -ne 124 ]]; then
+        wait "$claude_pid"
         exit_code=$?
     fi
 
+    rm -f "$temp_prompt"
+
+    # Stream output to terminal (tee equivalent, after the fact)
+    cat "$temp_output"
     output=$(cat "$temp_output")
     rm -f "$temp_output"
+
+    # Handle timeout
+    if [[ $exit_code -eq 124 ]]; then
+        log_error "Iteration timed out after ${timeout}s"
+        log_info "Claude may have stalled on an API call or long-running task"
+        log_info "The next iteration will retry. Adjust ITERATION_TIMEOUT in .walph/config if needed."
+    fi
 
     # Log the output
     log_claude_output "$output"
