@@ -168,9 +168,11 @@ _relative_path() {
         return 0
     fi
 
-    # Try python3 fallback (macOS)
-    if command -v python3 &>/dev/null; then
-        python3 -c "import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$target" "$base" 2>/dev/null && return 0
+    # Pure bash fallback: strip base path prefix if target starts with base
+    # This handles the common case of files within the base directory
+    if [[ "$target" == "$base"/* ]]; then
+        echo "${target#$base/}"
+        return 0
     fi
 
     # Last resort: just use the basename

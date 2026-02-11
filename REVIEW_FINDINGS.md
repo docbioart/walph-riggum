@@ -160,9 +160,10 @@
   - Fix: Use a shared `.gitignore` template file in `templates/` and have both scripts copy from it.
   - Note: Fixed by creating `templates/gitignore.template` with the comprehensive version and updating both scripts to copy from it instead of using heredocs.
 
-- [ ] **[COMPLEXITY]** `_relative_path()` in `converter.sh` shells out to Python as a fallback: In `lib/converter.sh` (lines 162-178), the `_relative_path()` function tries `realpath --relative-to`, then falls back to `python3 -c "..."`, then to `basename`. The Python fallback is a heavyweight solution for a simple path operation and introduces a dependency on Python being installed.
+- [x] **[COMPLEXITY]** `_relative_path()` in `converter.sh` shells out to Python as a fallback: In `lib/converter.sh` (lines 162-178), the `_relative_path()` function tries `realpath --relative-to`, then falls back to `python3 -c "..."`, then to `basename`. The Python fallback is a heavyweight solution for a simple path operation and introduces a dependency on Python being installed.
   - File(s): `lib/converter.sh` (lines 162-178)
   - Fix: Implement a pure-bash relative path function, or simply use `basename` consistently since the relative paths are only used for display labels in source markers, not for functional purposes.
+  - Note: Fixed by replacing Python fallback with pure bash string manipulation using parameter expansion (`${target#$base/}`). The function now tries `realpath --relative-to` first, then strips the base path prefix if the target is within the base directory, then falls back to `basename`.
 
 - [ ] **[ARCHITECTURE]** `show_howto()` and `show_help()` in `lib/utils.sh` are Walph-specific but live in a shared library: The `show_howto()` (lines 249-381) and `show_help()` (lines 383-436) functions in `lib/utils.sh` contain Walph-specific content. Since `lib/utils.sh` is sourced by all three tools (walph, goodbunny, jeeroy), these Walph-specific functions pollute the namespace when running goodbunny or jeeroy.
   - File(s): `lib/utils.sh` (lines 249-436)
