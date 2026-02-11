@@ -32,6 +32,12 @@ cleanup_temp_files() {
             rm -f "$f" 2>/dev/null
         done
     fi
+    # Also clean up any temp directories from converter.sh
+    if [[ -n "${_CONVERTER_TEMP_DIRS:-}" ]]; then
+        for d in $_CONVERTER_TEMP_DIRS; do
+            rm -rf "$d" 2>/dev/null
+        done
+    fi
 }
 
 trap cleanup_temp_files EXIT INT TERM
