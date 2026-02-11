@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source libraries
 source "$SCRIPT_DIR/lib/logging.sh"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
 
 # ============================================================================
@@ -93,7 +95,6 @@ create_walph_structure() {
     mkdir -p "$project_dir/specs"
 
     # Copy config template
-    source "$SCRIPT_DIR/lib/config.sh"
     write_default_config "$project_dir/.walph/config"
 
     # Copy prompt templates
