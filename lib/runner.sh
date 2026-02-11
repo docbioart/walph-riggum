@@ -236,14 +236,14 @@ run_main_loop() {
         # Run iteration
         WALPH_CURRENT_ITERATION="$iteration"
         local result
-        if run_iteration "$iteration" "$prompt_file" "$model"; then
+        run_iteration "$iteration" "$prompt_file" "$model"
+        result=$?
+        if [[ $result -eq 0 ]]; then
             log_success "Iteration $iteration completed successfully"
+        elif [[ $result -eq 2 ]]; then
+            log_info "Exit requested by user"
+            return 0
         else
-            result=$?
-            if [[ $result -eq 2 ]]; then
-                log_info "Exit requested by user"
-                return 0
-            fi
             log_warn "Iteration $iteration completed with issues"
         fi
 
