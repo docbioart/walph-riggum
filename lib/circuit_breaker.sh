@@ -38,10 +38,10 @@ _update_state() {
         local tmp_file
         tmp_file=$(mktemp)
         if [[ "$is_number" == "true" ]]; then
-            jq ".$key = $value" "$CIRCUIT_BREAKER_STATE_FILE" > "$tmp_file" && mv "$tmp_file" "$CIRCUIT_BREAKER_STATE_FILE"
+            jq ".$key = $value" "$CIRCUIT_BREAKER_STATE_FILE" > "$tmp_file" && mv "$tmp_file" "$CIRCUIT_BREAKER_STATE_FILE" || rm -f "$tmp_file"
         else
             # Use --arg to safely pass string values with special characters
-            jq --arg val "$value" ".$key = \$val" "$CIRCUIT_BREAKER_STATE_FILE" > "$tmp_file" && mv "$tmp_file" "$CIRCUIT_BREAKER_STATE_FILE"
+            jq --arg val "$value" ".$key = \$val" "$CIRCUIT_BREAKER_STATE_FILE" > "$tmp_file" && mv "$tmp_file" "$CIRCUIT_BREAKER_STATE_FILE" || rm -f "$tmp_file"
         fi
     fi
 }

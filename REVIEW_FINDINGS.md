@@ -107,7 +107,7 @@
   - File(s): `templates/PROMPT_build.md` (line 151), `templates/PROMPT_fix.md` (line 76)
   - Fix: Change the prompt instructions to use `git add <specific files>` instead. Instruct Claude to explicitly list the files it changed and stage only those, or at minimum use `git add .` (stages from current directory, not entire repo).
 
-- [ ] **[ERROR HANDLING]** `_update_state()` in `circuit_breaker.sh` leaks temp file on `jq` failure: In `lib/circuit_breaker.sh` (lines 36-43), `_update_state()` creates a temp file with `mktemp` (line 37), pipes `jq` output to it, then `mv`s it into place. If `jq` fails (e.g., malformed JSON in state file), the `&&` prevents the `mv`, but the temp file from `mktemp` is never cleaned up. Over many iterations with a corrupted state file, this accumulates orphaned temp files in `/tmp`.
+- [x] **[ERROR HANDLING]** `_update_state()` in `circuit_breaker.sh` leaks temp file on `jq` failure: In `lib/circuit_breaker.sh` (lines 36-43), `_update_state()` creates a temp file with `mktemp` (line 37), pipes `jq` output to it, then `mv`s it into place. If `jq` fails (e.g., malformed JSON in state file), the `&&` prevents the `mv`, but the temp file from `mktemp` is never cleaned up. Over many iterations with a corrupted state file, this accumulates orphaned temp files in `/tmp`.
   - File(s): `lib/circuit_breaker.sh` (lines 36-43)
   - Fix: Add a trap or explicit cleanup: `jq ... > "$tmp_file" && mv "$tmp_file" "$CIRCUIT_BREAKER_STATE_FILE" || rm -f "$tmp_file"`.
 
