@@ -14,7 +14,9 @@ init_circuit_breaker() {
 
     # Initialize state file if it doesn't exist
     if [[ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
-        echo '{"no_change_count":0,"same_error_count":0,"no_commit_count":0,"last_error":"","last_git_hash":"","iteration_history":[]}' > "$CIRCUIT_BREAKER_STATE_FILE"
+        local current_hash
+        current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+        echo "{\"no_change_count\":0,\"same_error_count\":0,\"no_commit_count\":0,\"last_error\":\"\",\"last_git_hash\":\"$current_hash\",\"iteration_history\":[]}" > "$CIRCUIT_BREAKER_STATE_FILE"
     fi
 }
 
