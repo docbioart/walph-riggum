@@ -165,9 +165,10 @@
   - Fix: Implement a pure-bash relative path function, or simply use `basename` consistently since the relative paths are only used for display labels in source markers, not for functional purposes.
   - Note: Fixed by replacing Python fallback with pure bash string manipulation using parameter expansion (`${target#$base/}`). The function now tries `realpath --relative-to` first, then strips the base path prefix if the target is within the base directory, then falls back to `basename`.
 
-- [ ] **[ARCHITECTURE]** `show_howto()` and `show_help()` in `lib/utils.sh` are Walph-specific but live in a shared library: The `show_howto()` (lines 249-381) and `show_help()` (lines 383-436) functions in `lib/utils.sh` contain Walph-specific content. Since `lib/utils.sh` is sourced by all three tools (walph, goodbunny, jeeroy), these Walph-specific functions pollute the namespace when running goodbunny or jeeroy.
+- [x] **[ARCHITECTURE]** `show_howto()` and `show_help()` in `lib/utils.sh` are Walph-specific but live in a shared library: The `show_howto()` (lines 249-381) and `show_help()` (lines 383-436) functions in `lib/utils.sh` contain Walph-specific content. Since `lib/utils.sh` is sourced by all three tools (walph, goodbunny, jeeroy), these Walph-specific functions pollute the namespace when running goodbunny or jeeroy.
   - File(s): `lib/utils.sh` (lines 249-436)
   - Fix: Move `show_howto()`, `show_help()`, and `show_version()` out of `lib/utils.sh` and into `walph.sh` directly, or into a dedicated `lib/walph_help.sh` that only `walph.sh` sources.
+  - Note: Fixed by creating `lib/walph_help.sh` with all three functions, updating `walph.sh` to source it, and removing the functions from `lib/utils.sh`. Walph-specific help content is now isolated and not available to goodbunny or jeeroy.
 
 - [ ] **[KISS]** `log_iteration_start()` banner has hardcoded padding that breaks alignment with long iteration numbers: In `lib/logging.sh` (lines 98-107), the banner uses fixed padding after the iteration info text. When `iteration` or `max_iterations` are multi-digit (e.g., "Iteration 15 / 100"), the right edge of the box misaligns. This is cosmetic but looks broken.
   - File(s): `lib/logging.sh` (lines 98-107)

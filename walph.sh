@@ -21,6 +21,7 @@ source "$SCRIPT_DIR/lib/runner.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
 source "$SCRIPT_DIR/lib/setup_command.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
+source "$SCRIPT_DIR/lib/walph_help.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
