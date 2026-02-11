@@ -201,9 +201,10 @@
   - File(s): `QUICKSTART.md` (lines 167, 261, 333, 334)
   - Fix: Replace "Ralph" with "Walph" in the user-facing text of `QUICKSTART.md`. Note: the `specs/README.md` template in `init.sh` (line 242) also references "Ralph" — change to "Walph" there too.
 
-- [ ] **[KISS]** `.gitignore` comment says "Ralph" but tool is named "Walph": In `walph.sh` (line 1288), the generated `.gitignore` contains the comment `# Ralph (keep config and prompts, ignore state and logs)`. This is a stale reference from the rename. Users who read the `.gitignore` may be confused about which tool this comment refers to.
+- [x] **[KISS]** `.gitignore` comment says "Ralph" but tool is named "Walph": In `walph.sh` (line 1288), the generated `.gitignore` contains the comment `# Ralph (keep config and prompts, ignore state and logs)`. This is a stale reference from the rename. Users who read the `.gitignore` may be confused about which tool this comment refers to.
   - File(s): `walph.sh` (line 1288)
   - Fix: Change `# Ralph` to `# Walph Riggum` in the `.gitignore` comment.
+  - Note: (false positive — already fixed in finding #158. Template file at templates/gitignore.template line 27 correctly uses "# Walph state (keep config and prompts)". Both walph.sh and init.sh now copy from template instead of using heredocs.)
 
 - [ ] **[ERROR HANDLING]** `reset_circuit_breaker()` injects git hash directly into JSON string without escaping: In `lib/circuit_breaker.sh` (line 224), the `reset_circuit_breaker()` function embeds `$current_hash` directly into a hand-crafted JSON string: `echo "{...\"last_git_hash\":\"$current_hash\"...}"`. While `git rev-parse HEAD` typically outputs only hex characters, if the `|| echo "no-git"` fallback triggers, the value is safe, but this pattern is fragile. If the function is ever called in a context where the hash variable could contain special characters (e.g., modified by a shell alias), the JSON would be malformed. This contrasts with `_update_state()` which uses `jq --arg` for safe string interpolation.
   - File(s): `lib/circuit_breaker.sh` (line 224)
