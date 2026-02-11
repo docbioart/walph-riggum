@@ -6,6 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="${HOME}/bin"
 
+# Source shared utilities for check_chrome_mcp
+source "$SCRIPT_DIR/lib/utils.sh"
+
 echo "Walph Riggum Installer"
 echo "======================"
 echo ""
@@ -40,20 +43,7 @@ else
 fi
 
 # Optional: chrome-devtools MCP (for UI testing)
-# We check if the MCP is configured by looking for it in Claude's config
-CHROME_MCP_FOUND=false
-if [[ -f "${HOME}/.config/claude/claude_desktop_config.json" ]]; then
-    if grep -q "chrome-devtools" "${HOME}/.config/claude/claude_desktop_config.json" 2>/dev/null; then
-        CHROME_MCP_FOUND=true
-    fi
-fi
-if [[ -f "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" ]]; then
-    if grep -q "chrome-devtools" "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" 2>/dev/null; then
-        CHROME_MCP_FOUND=true
-    fi
-fi
-
-if [[ "$CHROME_MCP_FOUND" == "true" ]]; then
+if check_chrome_mcp; then
     echo "✓ chrome-devtools MCP found"
 else
     echo "⚠ chrome-devtools MCP not found (recommended for UI testing)"

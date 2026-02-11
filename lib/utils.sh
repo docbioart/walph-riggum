@@ -42,6 +42,31 @@ check_dependencies() {
     return 0
 }
 
+# Check if chrome-devtools MCP is configured
+check_chrome_mcp() {
+    local chrome_mcp_found=false
+
+    # Check Linux/XDG config location
+    if [[ -f "${HOME}/.config/claude/claude_desktop_config.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/.config/claude/claude_desktop_config.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+
+    # Check macOS config location
+    if [[ -f "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+
+    if [[ "$chrome_mcp_found" == "true" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # ============================================================================
 # FILE UTILITIES
 # ============================================================================

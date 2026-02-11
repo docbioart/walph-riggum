@@ -192,9 +192,10 @@
   - Fix: Either add `.jeeroy_context.md` to the `$JEEROY_TEMP_FILES` tracking variable so it's cleaned up by the EXIT trap, or use `make_temp()` to create the context file in `/tmp/` instead of in the project directory.
   - Note: Fixed by adding `.jeeroy_context.md` to `$JEEROY_TEMP_FILES` at line 424, ensuring the trap cleanup handler removes the file on EXIT/INT/TERM signals.
 
-- [ ] **[DRY]** Chrome-devtools MCP detection logic is duplicated between `jeeroy.sh` and `install.sh`: Both `jeeroy.sh:validate_environment()` (lines 261-276) and `install.sh` (lines 44-54) contain identical logic to check for the chrome-devtools MCP by looking in two config file locations and grepping for "chrome-devtools". This same check could diverge over time.
+- [x] **[DRY]** Chrome-devtools MCP detection logic is duplicated between `jeeroy.sh` and `install.sh`: Both `jeeroy.sh:validate_environment()` (lines 261-276) and `install.sh` (lines 44-54) contain identical logic to check for the chrome-devtools MCP by looking in two config file locations and grepping for "chrome-devtools". This same check could diverge over time.
   - File(s): `jeeroy.sh` (lines 261-276), `install.sh` (lines 44-54)
   - Fix: Extract the chrome-devtools MCP detection into a shared function in `lib/utils.sh` (e.g., `check_chrome_mcp()`) and call it from both scripts.
+  - Note: Fixed by creating `check_chrome_mcp()` function in `lib/utils.sh` (lines 45-68). Updated `jeeroy.sh` (lines 272-276) to use shared function. Updated `install.sh` to source `lib/utils.sh` and use shared function (lines 10, 44-49).
 
 - [ ] **[KISS]** `QUICKSTART.md` references `Ralph` as the tool name in several user-facing messages: In `QUICKSTART.md`, lines 167, 261, 333, and 334 refer to "Ralph" (e.g., "Tell Ralph how to build", "When Ralph Stops", "List files to create — Helps Ralph understand scope"). The project has been renamed from Ralph to Walph, and these stale references may confuse users who only know the tool as "Walph."
   - File(s): `QUICKSTART.md` (lines 167, 261, 333, 334)
