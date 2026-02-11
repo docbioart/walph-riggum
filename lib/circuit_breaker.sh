@@ -223,7 +223,10 @@ reset_circuit_breaker() {
     if [[ -n "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
         local current_hash
         current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
-        echo "{\"no_change_count\":0,\"same_error_count\":0,\"no_commit_count\":0,\"last_error\":\"\",\"last_git_hash\":\"$current_hash\",\"iteration_history\":[]}" > "$CIRCUIT_BREAKER_STATE_FILE"
+        # Use jq for safe JSON generation with --arg to prevent injection
+        jq -n --arg hash "$current_hash" \
+            '{no_change_count:0,same_error_count:0,no_commit_count:0,last_error:"",last_git_hash:$hash,iteration_history:[]}' \
+            > "$CIRCUIT_BREAKER_STATE_FILE"
     fi
 }
 
