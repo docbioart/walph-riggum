@@ -137,6 +137,12 @@ parse_args() {
 load_goodbunny_config() {
     local project_config="$PROJECT_DIR/$GB_DIR/config"
 
+    # Unset circuit breaker thresholds that were set by lib/config.sh
+    # so we can apply goodbunny-specific defaults instead
+    unset CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD
+    unset CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD
+    unset CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD
+
     # Load from config file if it exists (safely parse as key=value)
     if [[ -f "$project_config" ]]; then
         # Read config file line by line, validate format, and set variables
@@ -155,7 +161,8 @@ load_goodbunny_config() {
                     MAX_ITERATIONS|MODEL_AUDIT|MODEL_FIX|ITERATION_TIMEOUT|\
                     CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
                     CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|GOODBUNNY_MAX_ITERATIONS|\
-                    GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_ITERATION_TIMEOUT)
+                    GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_ITERATION_TIMEOUT|\
+                    GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
                         # Safe assignment using eval with proper quoting
                         eval "$key=\"\$value\""
                         ;;
@@ -171,9 +178,10 @@ load_goodbunny_config() {
     ITERATION_TIMEOUT="${GOODBUNNY_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$GB_DEFAULT_ITERATION_TIMEOUT}}"
 
     # Circuit breaker thresholds (tighter than walph defaults)
-    CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD="${CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD:-$GB_DEFAULT_CB_NO_CHANGE}"
-    CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD="${CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD:-$GB_DEFAULT_CB_SAME_ERROR}"
-    CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD="${CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD:-$GB_DEFAULT_CB_NO_COMMIT}"
+    # Priority: goodbunny-specific env var > config file > goodbunny defaults
+    CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD="${GOODBUNNY_CB_NO_CHANGE:-${CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD:-$GB_DEFAULT_CB_NO_CHANGE}}"
+    CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD="${GOODBUNNY_CB_SAME_ERROR:-${CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD:-$GB_DEFAULT_CB_SAME_ERROR}}"
+    CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD="${GOODBUNNY_CB_NO_COMMIT:-${CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD:-$GB_DEFAULT_CB_NO_COMMIT}}"
 
     # Set resume command for rate limit handler
     export RESUME_COMMAND="goodbunny $MODE"
