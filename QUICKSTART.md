@@ -304,7 +304,7 @@ my-project/
 
 ```bash
 # Initialize new project
-./init.sh <name> --stack <node|python|both> [--docker] [--no-git]
+walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 
 # Run planning (generates IMPLEMENTATION_PLAN.md)
 ./walph.sh plan [--max-iterations N] [--model opus]

@@ -247,7 +247,7 @@
   - File(s): `QUICKSTART.md` (line 295)
   - Fix: Change `example.md` to `TEMPLATE.md` in the directory structure diagram.
 
-- [ ] **[ARCHITECTURE]** `QUICKSTART.md` still references `./init.sh` as the command reference instead of `walph init`: In `QUICKSTART.md` (line 307), the command reference section shows `./init.sh <name> --stack <node|python|both> [--docker] [--no-git]` as the initialization command. Since `walph init` is the preferred interface and `init.sh` may be deprecated, this documentation should reference the main entry point.
+- [x] **[ARCHITECTURE]** `QUICKSTART.md` still references `./init.sh` as the command reference instead of `walph init`: In `QUICKSTART.md` (line 307), the command reference section shows `./init.sh <name> --stack <node|python|both> [--docker] [--no-git]` as the initialization command. Since `walph init` is the preferred interface and `init.sh` may be deprecated, this documentation should reference the main entry point.
   - File(s): `QUICKSTART.md` (line 307)
   - Fix: Change `./init.sh <name> --stack <node|python|both> [--docker] [--no-git]` to `walph init <name> --template <type> --stack <lang> [--docker] [--postgres]` to match `walph.sh`'s current options.
 
