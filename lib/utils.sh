@@ -28,7 +28,7 @@ check_dependencies() {
     fi
 
     if ! command_exists "jq"; then
-        log_warn "jq not found - some features will be limited"
+        missing+=("jq")
     fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then
