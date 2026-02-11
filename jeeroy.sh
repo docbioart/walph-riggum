@@ -343,8 +343,9 @@ run_analysis() {
     local temp_output
     temp_output=$(make_temp)
 
-    if cat "$temp_prompt" | claude -p \
+    if claude -p \
         --model "$MODEL" \
+        < "$temp_prompt" \
         > "$temp_output" 2>&1; then
         cat "$temp_output"
     else
@@ -437,8 +438,9 @@ run_direct_generation() {
     local temp_output
     temp_output=$(make_temp)
 
-    if cat "$temp_prompt" | claude -p \
+    if claude -p \
         --model "$MODEL" \
+        < "$temp_prompt" \
         > "$temp_output" 2>&1; then
         cat "$temp_output"
     else
