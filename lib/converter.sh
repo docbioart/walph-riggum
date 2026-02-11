@@ -170,7 +170,7 @@ _relative_path() {
 
     # Try python3 fallback (macOS)
     if command -v python3 &>/dev/null; then
-        python3 -c "import os; print(os.path.relpath('$target', '$base'))" 2>/dev/null && return 0
+        python3 -c "import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$target" "$base" 2>/dev/null && return 0
     fi
 
     # Last resort: just use the basename

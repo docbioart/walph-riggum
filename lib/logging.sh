@@ -39,12 +39,12 @@ init_logging() {
     local session_id="$2"
 
     mkdir -p "$log_dir"
-    WALPH_LOG_FILE="$log_dir/walph_${session_id}.log"
+    WALPH_LOG_FILE="$log_dir/${LOG_FILE_PREFIX:-walph}_${session_id}.log"
 
     # Write session header
     {
         echo "============================================================"
-        echo "Walph Riggum Session: $session_id"
+        echo "${TOOL_NAME:-Walph Riggum} Session: $session_id"
         echo "Started: $(date -Iseconds)"
         echo "============================================================"
     } >> "$WALPH_LOG_FILE"
@@ -59,7 +59,7 @@ _log() {
     timestamp=$(date '+%H:%M:%S')
 
     # Console output
-    echo -e "${color}[WALPH]${RESET} ${BOLD}[$level]${RESET} $message"
+    echo -e "${color}[${LOG_PREFIX:-WALPH}]${RESET} ${BOLD}[$level]${RESET} $message"
 
     # File output (without colors)
     if [[ -n "$WALPH_LOG_FILE" ]]; then

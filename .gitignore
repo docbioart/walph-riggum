@@ -7,3 +7,7 @@ BLOG_POST.md
 
 # Logs
 *.log
+
+# Good Bunny
+.goodbunny/logs/
+.goodbunny/state/

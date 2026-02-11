@@ -4,6 +4,8 @@ An autonomous coding loop that runs Claude from the *outside* to build software 
 
 Comes with **[Jeeroy Lenkins](#jeeroy-lenkins---document-to-spec-converter)**, a companion tool that turns any pile of docs (Word, PDF, PowerPoint, markdown, etc.) into Walph-ready specs and optionally kicks off the entire pipeline with a single `--lfg` flag. Docs in, working code out.
 
+And **[Good Bunny](#good-bunny---autonomous-code-quality-reviewer)**, a code quality reviewer that audits any project for issues across 8 categories and fixes them autonomously. No setup required.
+
 > "Me fail English? That's unpossible!" - Walph Riggum
 
 ## Why Walph?
@@ -25,11 +27,12 @@ This is how humans work on large projects: do one thing, save your work, take a 
 
 ## How It's Different
 
-| Approach                     | Context              | Memory          | Docs-to-Code                | Best For                 |
-|------------------------------|----------------------|-----------------|-----------------------------|--------------------------|
-| **Interactive Claude Code**  | Accumulates          | In conversation | Manual                      | Small tasks, exploration |
-| **Claude Code plugins**      | Accumulates          | In conversation | Manual                      | Extending functionality  |
-| **Walph Riggum**             | Fresh each iteration | Files + Git     | One-shot via Jeeroy `--lfg` | Large projects, autonomy |
+| Approach                     | Context              | Memory          | Docs-to-Code                | Best For                    |
+|------------------------------|----------------------|-----------------|-----------------------------|-----------------------------|
+| **Interactive Claude Code**  | Accumulates          | In conversation | Manual                      | Small tasks, exploration    |
+| **Claude Code plugins**      | Accumulates          | In conversation | Manual                      | Extending functionality     |
+| **Walph Riggum**             | Fresh each iteration | Files + Git     | One-shot via Jeeroy `--lfg` | Large projects, autonomy    |
+| **Good Bunny**               | Fresh each iteration | REVIEW_FINDINGS | N/A                         | Code quality, any project   |
 
 Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
 
@@ -314,6 +317,78 @@ jeeroy ./client-docs --skip-qa --lfg
 When designing new projects, Jeeroy defaults to:
 - **Docker-first**: Uses Docker Compose with containerized databases/services
 - **UI testing included**: Specs include E2E testing requirements using chrome-devtools MCP
+
+## Good Bunny - Autonomous Code Quality Reviewer
+
+> "I'm a good bunny." - Good Bunny
+
+**Good Bunny** is a companion tool that autonomously audits and fixes code quality issues on **any project**. No setup required — just run it in your project directory.
+
+### How It Works
+
+```
+  Your Project                    REVIEW_FINDINGS.md
+  ┌──────────┐                    ┌──────────────────┐
+  │ src/     │                    │ - [ ] [SECURITY] │
+  │ tests/   │──> goodbunny ──>   │ - [ ] [DRY]      │──> goodbunny fix
+  │ etc.     │    audit (Opus)    │ - [ ] [TESTING]  │    (Sonnet)
+  └──────────┘                    └──────────────────┘
+                                          │
+                                          v
+                                  ┌──────────────────┐
+                                  │ Fixed code +     │
+                                  │ git commits      │
+                                  └──────────────────┘
+```
+
+1. **Audit** (Opus) - Good Bunny reads your project and reviews it against 8 code quality categories, generating `REVIEW_FINDINGS.md` with prioritized, actionable findings
+2. **Fix** (Sonnet) - Good Bunny picks ONE finding per iteration, fixes it, runs tests, marks it done, and commits — repeating until all findings are addressed
+
+### Works on Any Project
+
+Good Bunny needs no configuration files, no specs, no AGENTS.md. It auto-creates a `.goodbunny/` directory on first run and works with whatever it finds. If your project has an `AGENTS.md` with test commands, it'll use those. Otherwise, it detects common patterns by language.
+
+### Usage
+
+```bash
+# Full audit
+cd your-project
+goodbunny audit
+
+# Review REVIEW_FINDINGS.md, remove any false positives, then:
+goodbunny fix
+
+# Focused audit (specific categories or files)
+goodbunny audit --categories security,testing
+goodbunny audit --files src/api/
+
+# Limit fix iterations
+goodbunny fix --max-iterations 10
+```
+
+### Review Categories
+
+| Category        | What It Checks                                           |
+|-----------------|----------------------------------------------------------|
+| Security        | OWASP Top 10, hardcoded secrets, injection, auth         |
+| Architecture    | SRP, god modules, circular deps, coupling                |
+| Complexity      | Long functions, deep nesting, complex booleans           |
+| DRY             | Duplicated code, copy-paste patterns                     |
+| KISS            | Over-engineering, unnecessary abstraction                |
+| Dependencies    | Outdated/vulnerable packages, unused deps                |
+| Error Handling  | Missing catches, swallowed errors, validation            |
+| Testing         | Missing tests, coverage gaps, brittle tests              |
+
+### Configuration
+
+Good Bunny auto-creates `.goodbunny/config` on first run. Override via environment variables:
+
+```bash
+export GOODBUNNY_MAX_ITERATIONS=50
+export GOODBUNNY_MODEL_AUDIT="opus"
+export GOODBUNNY_MODEL_FIX="sonnet"
+export GOODBUNNY_ITERATION_TIMEOUT=1200
+```
 
 ## Inspiration & Background
 

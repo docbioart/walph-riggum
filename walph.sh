@@ -1448,6 +1448,8 @@ run_iteration() {
     # Check for completion
     if check_completion "$output"; then
         log_success "Completion signal received!"
+        # Write signal file so main_loop breaks after this iteration
+        touch "$PROJECT_DIR/$STATE_DIR/completion_signal"
         return 0
     fi
 
@@ -1548,6 +1550,7 @@ init_walph() {
 
     # Export mode for circuit breaker
     export WALPH_MODE="$MODE"
+    export TOOL_MODE="$MODE"
 
     log_info "Walph Riggum starting"
     log_info "Mode: $MODE"

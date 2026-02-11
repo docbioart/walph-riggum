@@ -55,9 +55,9 @@ check_file_changes() {
     local last_hash
     last_hash=$(_read_state "last_git_hash")
 
-    # Check working directory changes (exclude .walph/state/ to avoid self-resets)
+    # Check working directory changes (exclude state dirs to avoid self-resets)
     local working_changes
-    working_changes=$(git status --porcelain 2>/dev/null | grep -v '\.walph/state/' | wc -l | tr -d ' ')
+    working_changes=$(git status --porcelain 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' | wc -l | tr -d ' ')
 
     if [[ "$current_hash" != "$last_hash" ]] || [[ "$working_changes" -gt 0 ]]; then
         return 0  # Changes detected
@@ -80,14 +80,14 @@ check_error_pattern() {
 # Check for explicit stuck signal from Claude
 check_stuck_signal() {
     local output="$1"
-    if echo "$output" | grep -q "WALPH_STUCK\|RALPH_STUCK"; then
+    if echo "$output" | grep -q "WALPH_STUCK\|RALPH_STUCK\|GOODBUNNY_STUCK"; then
         return 0  # Stuck signal found
     fi
     return 1  # No stuck signal
 }
 
 # Check if there have been meaningful commits recently
-# Commits that only touch .walph/state/ are not counted (avoids self-resets)
+# Commits that only touch state dirs are not counted (avoids self-resets)
 check_commit_activity() {
     local current_hash
     current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
@@ -95,9 +95,9 @@ check_commit_activity() {
     last_hash=$(_read_state "last_git_hash")
 
     if [[ "$current_hash" != "$last_hash" ]]; then
-        # Verify the commit touched files outside .walph/state/
+        # Verify the commit touched files outside state dirs
         local meaningful_files
-        meaningful_files=$(git diff --name-only "$last_hash" "$current_hash" 2>/dev/null | grep -v '\.walph/state/' | wc -l | tr -d ' ')
+        meaningful_files=$(git diff --name-only "$last_hash" "$current_hash" 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' | wc -l | tr -d ' ')
         if [[ "$meaningful_files" -gt 0 ]]; then
             return 0  # New meaningful commit
         fi
@@ -206,7 +206,7 @@ circuit_breaker_triggered() {
     fi
 
     # Only check commit threshold in build mode
-    if [[ "${WALPH_MODE:-build}" == "build" ]]; then
+    if [[ "${TOOL_MODE:-${WALPH_MODE:-build}}" == "build" ]] || [[ "${TOOL_MODE:-${WALPH_MODE:-build}}" == "fix" ]]; then
         if [[ "$no_commit_count" -ge "${CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD:-5}" ]]; then
             log_error "Circuit breaker: No commits for $no_commit_count iterations"
             return 0

@@ -170,7 +170,7 @@ handle_rate_limit() {
     fi
 
     echo "  Your progress is safe — all completed tasks have been committed."
-    echo "  You can resume exactly where you left off with 'walph build'."
+    echo "  You can resume exactly where you left off with '${RESUME_COMMAND:-walph build}'."
     echo ""
     echo "Options:"
     echo "  1. Wait and retry (will wait ${delay} seconds)"
@@ -186,7 +186,7 @@ handle_rate_limit() {
             return 0  # Retry
             ;;
         2)
-            log_info "Exiting. Resume with: walph build"
+            log_info "Exiting. Resume with: ${RESUME_COMMAND:-walph build}"
             return 2  # Exit
             ;;
         3)

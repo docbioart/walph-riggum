@@ -1,0 +1,17 @@
+# Good Bunny Configuration
+# Uncomment and modify as needed
+
+# Maximum iterations before stopping
+# MAX_ITERATIONS=30
+
+# Models (use aliases: opus, sonnet, or full model names)
+# MODEL_AUDIT="opus"
+# MODEL_FIX="sonnet"
+
+# Iteration timeout in seconds (kills Claude if it hangs)
+# ITERATION_TIMEOUT=900
+
+# Circuit breaker thresholds
+# CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
+# CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=3
+# CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=4
