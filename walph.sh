@@ -614,7 +614,20 @@ EOF
     # Initialize git if not already a repo
     if [[ ! -d "$target_dir/.git" ]]; then
         log_info "Initializing git repository..."
-        (cd "$target_dir" && git init && git add . && git commit -m "Initialize Walph Riggum project") 2>/dev/null || true
+        if (cd "$target_dir" && git init); then
+            # Stage only the files Walph created
+            local git_add_cmd="cd \"$target_dir\" && git add .walph/ specs/ AGENTS.md IMPLEMENTATION_PLAN.md .gitignore"
+            if [[ "$INIT_DOCKER" == "true" ]]; then
+                git_add_cmd="$git_add_cmd Dockerfile docker-compose.yml"
+            fi
+            if eval "$git_add_cmd" && (cd "$target_dir" && git commit -m "Initialize Walph Riggum project"); then
+                log_info "Created initial git commit"
+            else
+                log_warn "Git initialization completed but commit failed (may be expected if no files to commit)"
+            fi
+        else
+            log_warn "Git initialization failed"
+        fi
     fi
 
     log_success "Project initialized!"
