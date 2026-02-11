@@ -292,7 +292,7 @@ my-project/
 │   ├── PROMPT_plan.md      # Planning prompt (customizable)
 │   └── PROMPT_build.md     # Building prompt (customizable)
 ├── specs/
-│   └── example.md          # Your requirements go here
+│   └── TEMPLATE.md         # Your requirements go here
 ├── AGENTS.md               # Build/test commands
 ├── IMPLEMENTATION_PLAN.md  # Generated task list
 └── .gitignore

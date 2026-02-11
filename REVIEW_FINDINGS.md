@@ -243,7 +243,7 @@
   - File(s): `QUICKSTART.md` (line 66)
   - Fix: Change "Replace `specs/example.md`" to "Copy `specs/TEMPLATE.md` to a new file" or "Replace `specs/TEMPLATE.md`" to match the actual files created by both init paths.
 
-- [ ] **[KISS]** `QUICKSTART.md` references `specs/example.md` in directory structure: In `QUICKSTART.md` (line 295), the directory structure diagram shows `└── example.md          # Your requirements go here` inside the `specs/` directory. However, the init command creates `TEMPLATE.md`, not `example.md`. This reinforces the incorrect expectation set by lines 66 and 512.
+- [x] **[KISS]** `QUICKSTART.md` references `specs/example.md` in directory structure: In `QUICKSTART.md` (line 295), the directory structure diagram shows `└── example.md          # Your requirements go here` inside the `specs/` directory. However, the init command creates `TEMPLATE.md`, not `example.md`. This reinforces the incorrect expectation set by lines 66 and 512.
   - File(s): `QUICKSTART.md` (line 295)
   - Fix: Change `example.md` to `TEMPLATE.md` in the directory structure diagram.
 
