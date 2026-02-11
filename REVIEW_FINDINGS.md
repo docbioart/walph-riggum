@@ -178,7 +178,7 @@
   - File(s): `QUICKSTART.md` (line 279)
   - Fix: Change `ralph_*.log` to `walph_*.log` in the troubleshooting command.
 
-- [ ] **[KISS]** `QUICKSTART.md` references `ralph_*.log` in a second location: In `QUICKSTART.md` (line 250), the monitoring command `tail -f .walph/logs/ralph_*.log` also uses the incorrect `ralph_` prefix.
+- [x] **[KISS]** `QUICKSTART.md` references `ralph_*.log` in a second location: In `QUICKSTART.md` (line 250), the monitoring command `tail -f .walph/logs/ralph_*.log` also uses the incorrect `ralph_` prefix.
   - File(s): `QUICKSTART.md` (line 250)
   - Fix: Change `ralph_*.log` to `walph_*.log` in the monitoring command as well.
 

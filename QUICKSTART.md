@@ -247,7 +247,7 @@ Walph will loop:
 
 ```bash
 # Watch logs live
-tail -f .walph/logs/ralph_*.log
+tail -f .walph/logs/walph_*.log
 
 # Check status
 ../walph.sh status
