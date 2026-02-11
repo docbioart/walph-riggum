@@ -216,7 +216,7 @@
   - Fix: Remove the entire if/else block since `load_goodbunny_config()` already ensures `MAX_ITERATIONS` is set.
   - Note: Fixed by removing the redundant if/else block (lines 537-542). The `load_goodbunny_config()` function already guarantees MAX_ITERATIONS is set via proper precedence: env var > config file > default.
 
-- [ ] **[ARCHITECTURE]** `init.sh` comment on line 483 says "Create Ralph structure" but tool is named "Walph": In `init.sh` (line 483), the comment reads `# Create Ralph structure` but calls `create_walph_structure`. This is a minor stale reference from the rename.
+- [x] **[ARCHITECTURE]** `init.sh` comment on line 483 says "Create Ralph structure" but tool is named "Walph": In `init.sh` (line 483), the comment reads `# Create Ralph structure` but calls `create_walph_structure`. This is a minor stale reference from the rename.
   - File(s): `init.sh` (line 483)
   - Fix: Change `# Create Ralph structure` to `# Create Walph structure`.
 

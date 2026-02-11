@@ -300,7 +300,7 @@ main() {
         mkdir -p "$project_dir"
     fi
 
-    # Create Ralph structure
+    # Create Walph structure
     create_walph_structure "$project_dir"
 
     # Create AGENTS.md
