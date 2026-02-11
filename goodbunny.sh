@@ -534,13 +534,6 @@ init_goodbunny() {
     # Load configuration
     load_goodbunny_config
 
-    # Apply command line override for max iterations
-    if [[ -n "${MAX_ITERATIONS:-}" ]]; then
-        : # Already set from parse_args or load_goodbunny_config
-    else
-        MAX_ITERATIONS="$GB_DEFAULT_MAX_ITERATIONS"
-    fi
-
     # Check dependencies
     if ! check_dependencies; then
         exit 1

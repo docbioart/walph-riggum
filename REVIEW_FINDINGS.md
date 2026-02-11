@@ -211,9 +211,10 @@
   - Fix: Use `jq` for the reset operation too, consistent with `_update_state()`: `jq -n --arg hash "$current_hash" '{"no_change_count":0,"same_error_count":0,"no_commit_count":0,"last_error":"","last_git_hash":$hash,"iteration_history":[]}' > "$CIRCUIT_BREAKER_STATE_FILE"`.
   - Note: Fixed by replacing direct string interpolation with `jq -n --arg hash "$current_hash"` pattern at lines 227-229, matching the safe approach used in `_update_state()`.
 
-- [ ] **[KISS]** `init_goodbunny()` has redundant `MAX_ITERATIONS` check: In `goodbunny.sh` (lines 659-663), the function checks `if [[ -n "${MAX_ITERATIONS:-}" ]]; then :` — this is a no-op block that does nothing (the `:` command). The comment says "Already set from parse_args or load_goodbunny_config" but the `else` branch also sets it redundantly to `$GB_DEFAULT_MAX_ITERATIONS`, which `load_goodbunny_config()` at line 146 already guarantees. The entire if/else block is dead logic.
+- [x] **[KISS]** `init_goodbunny()` has redundant `MAX_ITERATIONS` check: In `goodbunny.sh` (lines 659-663), the function checks `if [[ -n "${MAX_ITERATIONS:-}" ]]; then :` — this is a no-op block that does nothing (the `:` command). The comment says "Already set from parse_args or load_goodbunny_config" but the `else` branch also sets it redundantly to `$GB_DEFAULT_MAX_ITERATIONS`, which `load_goodbunny_config()` at line 146 already guarantees. The entire if/else block is dead logic.
   - File(s): `goodbunny.sh` (lines 659-663)
   - Fix: Remove the entire if/else block since `load_goodbunny_config()` already ensures `MAX_ITERATIONS` is set.
+  - Note: Fixed by removing the redundant if/else block (lines 537-542). The `load_goodbunny_config()` function already guarantees MAX_ITERATIONS is set via proper precedence: env var > config file > default.
 
 - [ ] **[ARCHITECTURE]** `init.sh` comment on line 483 says "Create Ralph structure" but tool is named "Walph": In `init.sh` (line 483), the comment reads `# Create Ralph structure` but calls `create_walph_structure`. This is a minor stale reference from the rename.
   - File(s): `init.sh` (line 483)
