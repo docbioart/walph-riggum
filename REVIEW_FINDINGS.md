@@ -95,7 +95,7 @@
   - Fix: Add a trap-based cleanup mechanism similar to `jeeroy.sh` (lines 27-45). Track temp files in a global variable and register a trap to clean them up on EXIT/INT/TERM.
   - Note: Fixed by adding trap-based cleanup to `lib/runner.sh` (lines 19-39). Created `RUNNER_TEMP_FILES` tracking variable, `cleanup_runner_temp_files()` function, trap handler for EXIT/INT/TERM signals, and `make_runner_temp()` helper. Updated temp file creation in `run_shared_iteration()` to use the tracked temp files.
 
-- [ ] **[KISS]** `install.sh` doesn't install `goodbunny` wrapper: The `install.sh` script (lines 72-101) creates wrapper scripts for `walph`, `walph-init`, and `jeeroy`, but not for `goodbunny`. Similarly, `uninstall.sh` doesn't remove a `goodbunny` wrapper. This means `goodbunny` can't be used as a global command after installation.
+- [x] **[KISS]** `install.sh` doesn't install `goodbunny` wrapper: The `install.sh` script (lines 72-101) creates wrapper scripts for `walph`, `walph-init`, and `jeeroy`, but not for `goodbunny`. Similarly, `uninstall.sh` doesn't remove a `goodbunny` wrapper. This means `goodbunny` can't be used as a global command after installation.
   - File(s): `install.sh` (lines 72-101), `uninstall.sh` (lines 12-26)
   - Fix: Add a `goodbunny` wrapper creation block in `install.sh` (similar to the jeeroy wrapper at lines 93-101), and add removal of `goodbunny` in `uninstall.sh`.
 

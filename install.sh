@@ -100,6 +100,17 @@ EOF
 
 chmod +x "$INSTALL_DIR/jeeroy"
 
+# Create goodbunny wrapper
+echo "Installing goodbunny command..."
+
+cat > "$INSTALL_DIR/goodbunny" << EOF
+#!/usr/bin/env bash
+# Good Bunny wrapper script
+exec "$SCRIPT_DIR/goodbunny.sh" "\$@"
+EOF
+
+chmod +x "$INSTALL_DIR/goodbunny"
+
 echo ""
 echo "Installation complete!"
 echo ""
@@ -117,5 +128,7 @@ echo "Usage:"
 echo "  walph plan               # Generate implementation plan"
 echo "  walph build              # Start building"
 echo "  walph init my-project    # Initialize new project"
+echo "  goodbunny audit          # Audit code quality"
+echo "  goodbunny fix            # Fix code quality issues"
 echo "  jeeroy ./docs            # Convert docs to Walph specs"
 echo "  jeeroy ./docs --lfg      # Convert docs and auto-build"

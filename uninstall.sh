@@ -25,6 +25,11 @@ if [[ -f "$INSTALL_DIR/jeeroy" ]]; then
     rm -f "$INSTALL_DIR/jeeroy"
 fi
 
+if [[ -f "$INSTALL_DIR/goodbunny" ]]; then
+    echo "Removing $INSTALL_DIR/goodbunny..."
+    rm -f "$INSTALL_DIR/goodbunny"
+fi
+
 echo ""
 echo "Uninstallation complete!"
 echo ""
