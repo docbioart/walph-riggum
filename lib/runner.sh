@@ -152,10 +152,10 @@ run_shared_iteration() {
 
     rm -f "$temp_prompt"
 
-    # Stream output to terminal (tee equivalent, after the fact)
-    cat "$temp_output"
+    # Capture output once and display it
     output=$(cat "$temp_output")
     rm -f "$temp_output"
+    echo "$output"
 
     # Handle timeout
     if [[ $exit_code -eq 124 ]]; then
