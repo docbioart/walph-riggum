@@ -1332,64 +1332,8 @@ run_iteration() {
 }
 
 main_loop() {
-    local iteration=1
-
-    while [[ $iteration -le $MAX_ITERATIONS ]]; do
-        # Check circuit breaker before iteration
-        if circuit_breaker_triggered; then
-            log_error "Circuit breaker triggered - stopping loop"
-            log_info "Run 'walph reset' to clear the circuit breaker"
-            return 1
-        fi
-
-        # Select prompt and model
-        local prompt_file
-        if [[ -f "$PROJECT_DIR/.walph/PROMPT_${MODE}.md" ]]; then
-            prompt_file="$PROJECT_DIR/.walph/PROMPT_${MODE}.md"
-        elif [[ -f "$SCRIPT_DIR/templates/PROMPT_${MODE}.md" ]]; then
-            prompt_file="$SCRIPT_DIR/templates/PROMPT_${MODE}.md"
-        else
-            log_error "No prompt template found for mode: $MODE"
-            return 1
-        fi
-
-        local model
-        if [[ -n "$MODEL_OVERRIDE" ]]; then
-            model="$MODEL_OVERRIDE"
-        else
-            model=$(get_model_for_mode "$MODE")
-        fi
-
-        # Run iteration (export for rate limit context)
-        WALPH_CURRENT_ITERATION="$iteration"
-        local result
-        if run_iteration "$iteration" "$prompt_file" "$model"; then
-            # Check if we got completion signal
-            log_success "Iteration $iteration completed successfully"
-        else
-            result=$?
-            if [[ $result -eq 2 ]]; then
-                log_info "Exit requested by user"
-                return 0
-            fi
-            log_warn "Iteration $iteration completed with issues"
-        fi
-
-        # Check again for completion (from status parser)
-        if [[ -f "$PROJECT_DIR/.walph/state/completion_signal" ]]; then
-            log_success "All tasks completed!"
-            rm -f "$PROJECT_DIR/.walph/state/completion_signal"
-            return 0
-        fi
-
-        ((iteration++))
-
-        # Small delay between iterations
-        sleep 1
-    done
-
-    log_warn "Maximum iterations ($MAX_ITERATIONS) reached"
-    return 0
+    # Use shared main loop implementation from lib/runner.sh
+    run_main_loop ".walph" ".walph/state" "get_model_for_mode" "walph"
 }
 
 # ============================================================================

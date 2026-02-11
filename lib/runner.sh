@@ -183,3 +183,83 @@ run_shared_iteration() {
 
     return "$exit_code"
 }
+
+# Run the main autonomous loop
+#
+# Parameters:
+#   $1: tool config directory (e.g., ".walph" or "$GB_DIR")
+#   $2: state directory path relative to project (e.g., ".walph/state" or "$GB_STATE_DIR")
+#   $3: model getter function name (e.g., "get_model_for_mode" or "get_gb_model")
+#   $4: tool name for error messages (e.g., "walph" or "goodbunny")
+#
+# Returns:
+#   0: success or max iterations reached
+#   1: error or circuit breaker triggered
+run_main_loop() {
+    local config_dir="$1"
+    local state_dir="$2"
+    local model_getter="$3"
+    local tool_name="$4"
+
+    local iteration=1
+
+    while [[ $iteration -le $MAX_ITERATIONS ]]; do
+        # Check circuit breaker before iteration
+        if circuit_breaker_triggered; then
+            log_error "Circuit breaker triggered — stopping loop"
+            log_info "Run '$tool_name reset' to clear the circuit breaker"
+            return 1
+        fi
+
+        # Select prompt file
+        local prompt_file
+        if [[ -f "$PROJECT_DIR/$config_dir/PROMPT_${MODE}.md" ]]; then
+            prompt_file="$PROJECT_DIR/$config_dir/PROMPT_${MODE}.md"
+        elif [[ -f "$SCRIPT_DIR/templates/PROMPT_${MODE}.md" ]]; then
+            prompt_file="$SCRIPT_DIR/templates/PROMPT_${MODE}.md"
+        else
+            log_error "No prompt template found for mode: $MODE"
+            return 1
+        fi
+
+        # Select model
+        local model
+        if [[ -n "$MODEL_OVERRIDE" ]]; then
+            model="$MODEL_OVERRIDE"
+        else
+            model=$("$model_getter" "$MODE")
+        fi
+
+        # Export mode for circuit breaker (used by goodbunny)
+        export TOOL_MODE="$MODE"
+
+        # Run iteration
+        WALPH_CURRENT_ITERATION="$iteration"
+        local result
+        if run_iteration "$iteration" "$prompt_file" "$model"; then
+            log_success "Iteration $iteration completed successfully"
+        else
+            result=$?
+            if [[ $result -eq 2 ]]; then
+                log_info "Exit requested by user"
+                return 0
+            fi
+            log_warn "Iteration $iteration completed with issues"
+        fi
+
+        # Check for completion signal file
+        if [[ -f "$PROJECT_DIR/$state_dir/completion_signal" ]]; then
+            log_success "All work completed!"
+            rm -f "$PROJECT_DIR/$state_dir/completion_signal"
+            return 0
+        fi
+
+        ((iteration++))
+
+        # Small delay between iterations
+        sleep 1
+    done
+
+    log_warn "Maximum iterations ($MAX_ITERATIONS) reached"
+    return 0
+}

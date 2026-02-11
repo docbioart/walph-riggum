@@ -360,67 +360,8 @@ run_iteration() {
 # ============================================================================
 
 main_loop() {
-    local iteration=1
-
-    while [[ $iteration -le $MAX_ITERATIONS ]]; do
-        # Check circuit breaker before iteration
-        if circuit_breaker_triggered; then
-            log_error "Circuit breaker triggered — stopping loop"
-            log_info "Run 'goodbunny reset' to clear the circuit breaker"
-            return 1
-        fi
-
-        # Select prompt file
-        local prompt_file
-        if [[ -f "$PROJECT_DIR/$GB_DIR/PROMPT_${MODE}.md" ]]; then
-            prompt_file="$PROJECT_DIR/$GB_DIR/PROMPT_${MODE}.md"
-        elif [[ -f "$SCRIPT_DIR/templates/PROMPT_${MODE}.md" ]]; then
-            prompt_file="$SCRIPT_DIR/templates/PROMPT_${MODE}.md"
-        else
-            log_error "No prompt template found for mode: $MODE"
-            return 1
-        fi
-
-        # Select model
-        local model
-        if [[ -n "$MODEL_OVERRIDE" ]]; then
-            model="$MODEL_OVERRIDE"
-        else
-            model=$(get_gb_model "$MODE")
-        fi
-
-        # Export mode for circuit breaker
-        export TOOL_MODE="$MODE"
-
-        # Run iteration
-        WALPH_CURRENT_ITERATION="$iteration"
-        local result
-        if run_iteration "$iteration" "$prompt_file" "$model"; then
-            log_success "Iteration $iteration completed successfully"
-        else
-            result=$?
-            if [[ $result -eq 2 ]]; then
-                log_info "Exit requested by user"
-                return 0
-            fi
-            log_warn "Iteration $iteration completed with issues"
-        fi
-
-        # Check for completion signal file
-        if [[ -f "$PROJECT_DIR/$GB_STATE_DIR/completion_signal" ]]; then
-            log_success "All work completed!"
-            rm -f "$PROJECT_DIR/$GB_STATE_DIR/completion_signal"
-            return 0
-        fi
-
-        ((iteration++))
-
-        # Small delay between iterations
-        sleep 1
-    done
-
-    log_warn "Maximum iterations ($MAX_ITERATIONS) reached"
-    return 0
+    # Use shared main loop implementation from lib/runner.sh
+    run_main_loop "$GB_DIR" "$GB_STATE_DIR" "get_gb_model" "goodbunny"
 }
 
 # ============================================================================

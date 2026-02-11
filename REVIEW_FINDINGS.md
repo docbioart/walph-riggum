@@ -32,7 +32,7 @@
   - File(s): `walph.sh` (lines 1323-1455), `goodbunny.sh` (lines 295-447)
   - Fix: Extract the shared iteration runner logic into a new `lib/runner.sh` library file. The function should accept a callback or additional parameters for tool-specific template substitutions. Both `walph.sh` and `goodbunny.sh` should source and call this shared function.
 
-- [ ] **[DRY]** `main_loop()` is duplicated between `walph.sh` and `goodbunny.sh`: The `main_loop()` function in `walph.sh` (lines 1457-1516) and `goodbunny.sh` (lines 453-515) follow the same pattern: iterate up to max, check circuit breaker, select prompt file, select model, run iteration, check completion signal file, increment. The differences are minor (different state directory paths, different model getter functions).
+- [x] **[DRY]** `main_loop()` is duplicated between `walph.sh` and `goodbunny.sh`: The `main_loop()` function in `walph.sh` (lines 1457-1516) and `goodbunny.sh` (lines 453-515) follow the same pattern: iterate up to max, check circuit breaker, select prompt file, select model, run iteration, check completion signal file, increment. The differences are minor (different state directory paths, different model getter functions).
   - File(s): `walph.sh` (lines 1457-1516), `goodbunny.sh` (lines 453-515)
   - Fix: Extract into a shared `run_main_loop()` function in `lib/runner.sh` that accepts parameters for the state directory, model getter function, and prompt lookup paths.
 
