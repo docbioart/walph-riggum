@@ -36,7 +36,7 @@
   - File(s): `walph.sh` (lines 1457-1516), `goodbunny.sh` (lines 453-515)
   - Fix: Extract into a shared `run_main_loop()` function in `lib/runner.sh` that accepts parameters for the state directory, model getter function, and prompt lookup paths.
 
-- [ ] **[DRY]** `create_agents_md` is defined three times with minor variations: The function exists in `walph.sh` (lines 456-534 for setup and 676-933 for init) and `init.sh` (lines 107-171). All three generate an `AGENTS.md` file with build/test/lint commands based on the stack, but each has a different level of detail and slightly different format.
+- [x] **[DRY]** `create_agents_md` is defined three times with minor variations: The function exists in `walph.sh` (lines 456-534 for setup and 676-933 for init) and `init.sh` (lines 107-171). All three generate an `AGENTS.md` file with build/test/lint commands based on the stack, but each has a different level of detail and slightly different format.
   - File(s): `walph.sh` (lines 456-534, 676-933), `init.sh` (lines 107-171)
   - Fix: Consolidate into a single `create_agents_md()` function in a shared library (e.g., `lib/project_setup.sh`). Accept parameters for the level of detail needed (basic vs. detailed with structure). Both `walph.sh` and `init.sh` should call this shared function.
 

@@ -18,6 +18,7 @@ source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/runner.sh"
+source "$SCRIPT_DIR/lib/project_setup.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
@@ -454,85 +455,7 @@ detect_stack() {
     echo "node"
 }
 
-create_setup_agents_md() {
-    local target_dir="$1"
-    local stack="$2"
-    local project_name
-    project_name=$(basename "$target_dir")
-
-    local build_cmd test_cmd lint_cmd
-
-    case "$stack" in
-        node)
-            build_cmd="npm run build"
-            test_cmd="npm test"
-            lint_cmd="npm run lint"
-            ;;
-        python)
-            build_cmd="pip install -e ."
-            test_cmd="pytest"
-            lint_cmd="ruff check ."
-            ;;
-        swift)
-            build_cmd="swift build"
-            test_cmd="swift test"
-            lint_cmd="swiftlint"
-            ;;
-        kotlin)
-            build_cmd="./gradlew assembleDebug"
-            test_cmd="./gradlew test"
-            lint_cmd="./gradlew ktlintCheck"
-            ;;
-        go)
-            build_cmd="go build ./..."
-            test_cmd="go test ./..."
-            lint_cmd="golangci-lint run"
-            ;;
-        rust)
-            build_cmd="cargo build"
-            test_cmd="cargo test"
-            lint_cmd="cargo clippy"
-            ;;
-        *)
-            build_cmd="# Add your build command"
-            test_cmd="# Add your test command"
-            lint_cmd="# Add your lint command"
-            ;;
-    esac
-
-    cat > "$target_dir/AGENTS.md" << EOF
-# Project: $project_name
-
-## Stack: $stack
-
-## Build Commands
-
-\`\`\`bash
-$build_cmd
-\`\`\`
-
-## Test Commands
-
-\`\`\`bash
-$test_cmd
-\`\`\`
-
-## Lint Commands
-
-\`\`\`bash
-$lint_cmd
-\`\`\`
-
-## Notes for Claude
-
-- Follow existing code patterns and style
-- Run tests after making changes
-- Commit after each completed task
-- Check existing files before creating new ones
-
-<!-- Add project-specific notes below -->
-EOF
-}
+# Removed: now using create_agents_md from lib/project_setup.sh
 
 run_setup() {
     local target_dir
@@ -625,7 +548,8 @@ EOF
     # Create AGENTS.md if it doesn't exist (or if force)
     if [[ ! -f "$target_dir/AGENTS.md" ]] || [[ "$SETUP_FORCE" == "true" ]]; then
         log_info "Creating AGENTS.md..."
-        create_setup_agents_md "$target_dir" "$stack"
+        # Call shared function in basic mode (no template)
+        create_agents_md "$target_dir" "$stack"
     else
         log_info "AGENTS.md already exists - keeping existing file"
     fi
@@ -673,265 +597,7 @@ EOF
     echo "  5. Run: walph build"
 }
 
-# Generate AGENTS.md based on template and stack
-create_agents_md() {
-    local target_dir="$1"
-    local build_cmd test_cmd lint_cmd structure notes
-
-    # Set defaults based on stack
-    case "$INIT_STACK" in
-        node)
-            build_cmd="npm run build"
-            test_cmd="npm test"
-            lint_cmd="npm run lint"
-            ;;
-        python)
-            build_cmd="pip install -e ."
-            test_cmd="pytest"
-            lint_cmd="ruff check ."
-            ;;
-        swift)
-            build_cmd="xcodebuild -scheme $INIT_PROJECT_NAME -destination 'platform=iOS Simulator,name=iPhone 15' build"
-            test_cmd="xcodebuild -scheme $INIT_PROJECT_NAME -destination 'platform=iOS Simulator,name=iPhone 15' test"
-            lint_cmd="swiftlint"
-            ;;
-        kotlin)
-            build_cmd="./gradlew assembleDebug"
-            test_cmd="./gradlew test"
-            lint_cmd="./gradlew ktlintCheck"
-            ;;
-        *)
-            build_cmd="# Add your build command"
-            test_cmd="# Add your test command"
-            lint_cmd="# Add your lint command"
-            ;;
-    esac
-
-    # Override/extend based on template
-    case "$INIT_TEMPLATE" in
-        api)
-            if [[ "$INIT_STACK" == "node" ]]; then
-                structure="$INIT_PROJECT_NAME/
-├── src/
-│   ├── routes/        # API route handlers
-│   ├── services/      # Business logic
-│   ├── middleware/    # Express middleware
-│   └── index.js       # Entry point
-├── tests/
-├── package.json
-└── specs/"
-                notes="- Use Express.js for the API framework
-- Follow RESTful conventions
-- Validate all inputs
-- Return appropriate HTTP status codes
-- Write integration tests for endpoints"
-            else
-                structure="$INIT_PROJECT_NAME/
-├── src/
-│   ├── routes/        # API route handlers
-│   ├── services/      # Business logic
-│   └── main.py        # Entry point
-├── tests/
-├── requirements.txt
-└── specs/"
-                notes="- Use FastAPI for the API framework
-- Follow RESTful conventions
-- Use Pydantic for validation
-- Return appropriate HTTP status codes"
-            fi
-            ;;
-
-        fullstack)
-            structure="$INIT_PROJECT_NAME/
-├── src/
-│   ├── api/           # Backend API
-│   ├── web/           # Frontend
-│   └── db/            # Database migrations
-├── docker/
-├── docker-compose.yml
-├── package.json
-└── specs/"
-            notes="- API in src/api/, frontend in src/web/
-- Use environment variables for config
-- Database migrations in src/db/
-- docker-compose up for local development"
-            ;;
-
-        cli)
-            if [[ "$INIT_STACK" == "node" ]]; then
-                structure="$INIT_PROJECT_NAME/
-├── src/
-│   ├── commands/      # Command implementations
-│   ├── utils/         # Helper functions
-│   └── cli.js         # Entry point
-├── bin/               # Executable scripts
-├── tests/
-├── package.json
-└── specs/"
-                notes="- Use commander.js or yargs for argument parsing
-- Support --help and --version flags
-- Exit with appropriate codes (0=success, 1=error)
-- Write tests for each command"
-            else
-                structure="$INIT_PROJECT_NAME/
-├── src/
-│   ├── commands/      # Command implementations
-│   ├── utils/         # Helper functions
-│   └── cli.py         # Entry point
-├── tests/
-├── setup.py
-└── specs/"
-                notes="- Use click or argparse for argument parsing
-- Support --help and --version flags
-- Exit with appropriate codes
-- Make it installable via pip"
-            fi
-            ;;
-
-        ios)
-            build_cmd="xcodebuild -project $INIT_PROJECT_NAME.xcodeproj -scheme $INIT_PROJECT_NAME -destination 'platform=iOS Simulator,name=iPhone 15' build"
-            test_cmd="xcodebuild -project $INIT_PROJECT_NAME.xcodeproj -scheme $INIT_PROJECT_NAME -destination 'platform=iOS Simulator,name=iPhone 15' test"
-            structure="$INIT_PROJECT_NAME/
-├── $INIT_PROJECT_NAME/
-│   ├── App/           # App entry point
-│   ├── Views/         # SwiftUI views
-│   ├── Models/        # Data models
-│   ├── ViewModels/    # View models
-│   ├── Services/      # API/data services
-│   └── Resources/     # Assets, strings
-├── ${INIT_PROJECT_NAME}Tests/
-├── $INIT_PROJECT_NAME.xcodeproj
-└── specs/"
-            notes="- Use SwiftUI for UI
-- Follow MVVM architecture
-- Use Combine for reactive programming
-- Support iOS 16+
-- Use Swift Package Manager for dependencies
-- Write XCTest unit tests"
-            ;;
-
-        android)
-            structure="$INIT_PROJECT_NAME/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/example/$INIT_PROJECT_NAME/
-│   │   │   ├── ui/           # Compose UI
-│   │   │   ├── data/         # Repositories, data sources
-│   │   │   ├── domain/       # Use cases, models
-│   │   │   └── MainActivity.kt
-│   │   └── res/              # Resources
-│   └── build.gradle.kts
-├── build.gradle.kts
-└── specs/"
-            notes="- Use Jetpack Compose for UI
-- Follow MVVM architecture
-- Use Kotlin Coroutines for async
-- Support Android API 26+
-- Use Hilt for dependency injection
-- Write JUnit tests"
-            ;;
-
-        capacitor)
-            build_cmd="npm run build && npx cap sync"
-            test_cmd="npm test"
-            structure="$INIT_PROJECT_NAME/
-├── src/               # Web app source (React/Vue/etc)
-│   ├── components/
-│   ├── pages/
-│   └── services/
-├── ios/               # iOS native project
-├── android/           # Android native project
-├── capacitor.config.ts
-├── package.json
-└── specs/"
-            notes="- Web app in src/, built with Vite/webpack
-- Run 'npx cap sync' after web build
-- iOS: open ios/App/App.xcworkspace in Xcode
-- Android: open android/ in Android Studio
-- Use Capacitor plugins for native features
-- Test web version first, then native"
-            ;;
-
-        monorepo)
-            build_cmd="npm run build --workspaces"
-            test_cmd="npm test --workspaces"
-            lint_cmd="npm run lint --workspaces"
-            structure="$INIT_PROJECT_NAME/
-├── packages/
-│   ├── api/           # Backend service
-│   ├── web/           # Frontend app
-│   └── shared/        # Shared utilities/types
-├── package.json       # Workspace root
-└── specs/"
-            notes="- Use npm/yarn/pnpm workspaces
-- Shared code in packages/shared
-- Each package has its own package.json
-- Import shared code: @$INIT_PROJECT_NAME/shared"
-            ;;
-
-        *)
-            # Default structure
-            structure="$INIT_PROJECT_NAME/
-├── src/               # Source code
-├── tests/             # Test files
-└── specs/             # Requirements"
-            notes="- Follow existing code patterns
-- Write tests for new functionality"
-            ;;
-    esac
-
-    # Add postgres note if enabled
-    if [[ "$INIT_POSTGRES" == "true" ]]; then
-        notes="$notes
-- PostgreSQL connection via DATABASE_URL env var
-- Run migrations before starting app"
-    fi
-
-    # Add docker note if enabled
-    if [[ "$INIT_DOCKER" == "true" ]]; then
-        notes="$notes
-- Use 'docker-compose up' for local development
-- All services defined in docker-compose.yml"
-    fi
-
-    cat > "$target_dir/AGENTS.md" << EOF
-# Project: $INIT_PROJECT_NAME
-
-## Template: ${INIT_TEMPLATE:-custom}
-## Stack: ${INIT_STACK:-not specified}
-
-## Build Commands
-
-\`\`\`bash
-$build_cmd
-\`\`\`
-
-## Test Commands
-
-\`\`\`bash
-$test_cmd
-\`\`\`
-
-## Lint Commands
-
-\`\`\`bash
-$lint_cmd
-\`\`\`
-
-## Project Structure
-
-\`\`\`
-$structure
-\`\`\`
-
-## Notes for Claude
-
-- Always run tests after making changes
-- Commit after each completed task
-- Follow existing code style and patterns
-$notes
-EOF
-}
+# Removed: now using create_agents_md from lib/project_setup.sh
 
 # Generate Docker files based on template and stack
 create_docker_files() {
@@ -1236,7 +902,8 @@ EOF
 
     # Create AGENTS.md based on template and stack
     log_info "Creating AGENTS.md..."
-    create_agents_md "$target_dir"
+    # Call shared function from lib/project_setup.sh with detailed mode (includes template)
+    create_agents_md "$target_dir" "$INIT_STACK" "$INIT_TEMPLATE" "$INIT_PROJECT_NAME" "$INIT_DOCKER" "$INIT_POSTGRES"
 
     # Create empty IMPLEMENTATION_PLAN.md
     log_info "Creating IMPLEMENTATION_PLAN.md..."

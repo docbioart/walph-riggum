@@ -6,8 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source logging
+# Source libraries
 source "$SCRIPT_DIR/lib/logging.sh"
+source "$SCRIPT_DIR/lib/project_setup.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
@@ -104,71 +105,7 @@ create_walph_structure() {
     fi
 }
 
-create_agents_md() {
-    local project_dir="$1"
-    local stack="$2"
-
-    log_info "Creating AGENTS.md..."
-
-    local build_cmd="# Add your build command"
-    local test_cmd="# Add your test command"
-    local lint_cmd="# Add your lint command"
-
-    case "$stack" in
-        node)
-            build_cmd="npm run build"
-            test_cmd="npm test"
-            lint_cmd="npm run lint"
-            ;;
-        python)
-            build_cmd="pip install -e ."
-            test_cmd="pytest"
-            lint_cmd="ruff check ."
-            ;;
-        both)
-            build_cmd="npm run build && pip install -e ."
-            test_cmd="npm test && pytest"
-            lint_cmd="npm run lint && ruff check ."
-            ;;
-    esac
-
-    cat > "$project_dir/AGENTS.md" << EOF
-# Project: $PROJECT_NAME
-
-## Build Commands
-
-\`\`\`bash
-$build_cmd
-\`\`\`
-
-## Test Commands
-
-\`\`\`bash
-$test_cmd
-\`\`\`
-
-## Lint Commands
-
-\`\`\`bash
-$lint_cmd
-\`\`\`
-
-## Project Structure
-
-<!-- Describe your project structure here -->
-
-## Key Files
-
-<!-- List important files and their purposes -->
-
-## Notes for Claude
-
-- Always run tests after making changes
-- Commit after each completed task
-- Follow existing code style and patterns
-- Ask for clarification if requirements are unclear
-EOF
-}
+# Removed: now using create_agents_md from lib/project_setup.sh
 
 create_implementation_plan() {
     local project_dir="$1"
