@@ -174,7 +174,7 @@
   - File(s): `lib/logging.sh` (lines 98-107)
   - Fix: Either remove the right-side border character, or calculate padding dynamically based on the length of the iteration string using `printf` formatting.
 
-- [ ] **[KISS]** `QUICKSTART.md` references `ralph_*.log` but actual log files use `walph_` prefix: In `QUICKSTART.md` (line 279), the command `cat .walph/logs/ralph_*.log | tail -100` references files starting with `ralph_`, but the actual logging in `lib/logging.sh` (line 42) uses `${LOG_FILE_PREFIX:-walph}_${session_id}.log`, which defaults to `walph_*`. Users following the quickstart guide would see no matching files.
+- [x] **[KISS]** `QUICKSTART.md` references `ralph_*.log` but actual log files use `walph_` prefix: In `QUICKSTART.md` (line 279), the command `cat .walph/logs/ralph_*.log | tail -100` references files starting with `ralph_`, but the actual logging in `lib/logging.sh` (line 42) uses `${LOG_FILE_PREFIX:-walph}_${session_id}.log`, which defaults to `walph_*`. Users following the quickstart guide would see no matching files.
   - File(s): `QUICKSTART.md` (line 279)
   - Fix: Change `ralph_*.log` to `walph_*.log` in the troubleshooting command.
 

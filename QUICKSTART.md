@@ -276,7 +276,7 @@ git log --oneline
 # Check what's wrong
 cat IMPLEMENTATION_PLAN.md
 git diff
-cat .walph/logs/ralph_*.log | tail -100
+cat .walph/logs/walph_*.log | tail -100
 ```
 
 ---
