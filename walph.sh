@@ -661,7 +661,6 @@ init_walph() {
     ensure_directories "$PROJECT_DIR"
 
     # Initialize logging
-    local session_id
     session_id=$(generate_session_id)
     init_logging "$PROJECT_DIR/$LOG_DIR" "$session_id"
 
@@ -700,7 +699,7 @@ main() {
     # Start monitoring if requested
     if [[ "$MONITOR_MODE" == "true" ]]; then
         log_info "Starting monitoring session..."
-        start_monitor_session "$PROJECT_DIR/$LOG_DIR/walph_$(generate_session_id).log" "$PROJECT_DIR"
+        start_monitor_session "$PROJECT_DIR/$LOG_DIR/walph_${session_id}.log" "$PROJECT_DIR"
     fi
 
     # Run main loop
