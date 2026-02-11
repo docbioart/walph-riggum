@@ -80,11 +80,11 @@ EOF
 
 chmod +x "$INSTALL_DIR/walph"
 
-# Create init wrapper
+# Create init wrapper (calls walph init instead of init.sh)
 cat > "$INSTALL_DIR/walph-init" << EOF
 #!/usr/bin/env bash
 # Walph Riggum init wrapper script
-exec "$SCRIPT_DIR/init.sh" "\$@"
+exec "$SCRIPT_DIR/walph.sh" init "\$@"
 EOF
 
 chmod +x "$INSTALL_DIR/walph-init"
