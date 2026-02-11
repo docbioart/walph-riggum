@@ -15,6 +15,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Set tool identity BEFORE sourcing shared libs (they use these for display)
+export LOG_PREFIX="JEEROY"
+export LOG_FILE_PREFIX="jeeroy"
+export TOOL_NAME="Jeeroy Lenkins"
+
 # Source shared libraries
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
