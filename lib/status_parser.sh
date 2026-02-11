@@ -173,9 +173,14 @@ check_api_error() {
 extract_error_message() {
     local output="$1"
 
+    # Only search the last 20 lines of output where actual errors typically appear
+    # This avoids false positives from Claude's explanations, code examples, or logs
+    local last_lines
+    last_lines=$(echo "$output" | tail -20)
+
     # Try to find common error patterns
     local error_line
-    error_line=$(echo "$output" | grep -i "error\|failed\|exception" | head -1)
+    error_line=$(echo "$last_lines" | grep -i "error\|failed\|exception" | head -1)
 
     if [[ -n "$error_line" ]]; then
         echo "$error_line"
