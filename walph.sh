@@ -1038,6 +1038,9 @@ init_walph() {
     export WALPH_MODE="$MODE"
     export TOOL_MODE="$MODE"
 
+    # Set resume command for rate limit handler
+    export RESUME_COMMAND="walph $MODE"
+
     log_info "Walph Riggum starting"
     log_info "Mode: $MODE"
     log_info "Max iterations: $MAX_ITERATIONS"

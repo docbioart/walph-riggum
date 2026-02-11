@@ -59,9 +59,10 @@
   - Fix: Use a different substitution approach that avoids `sed` entirely. For example, use bash parameter expansion: `full_prompt="${full_prompt//\{\{CATEGORIES\}\}/$categories_section}"`. This handles arbitrary replacement content safely without needing to escape sed metacharacters.
   - Note: Fixed by replacing all sed-based template substitutions with bash parameter expansion in both `_gb_template_callback()` and `run_shared_iteration()`.
 
-- [ ] **[ERROR HANDLING]** `walph.sh` rate limit handler always shows `walph build` as resume command regardless of actual mode: The `handle_rate_limit()` function in `lib/utils.sh` (line 173) uses `${RESUME_COMMAND:-walph build}` for the resume message. While `goodbunny.sh` correctly exports `RESUME_COMMAND="goodbunny $MODE"` (line 157), `walph.sh` never sets `RESUME_COMMAND` anywhere. If a user is running `walph plan` and hits a rate limit, the prompt tells them to resume with `walph build` instead of `walph plan`.
+- [x] **[ERROR HANDLING]** `walph.sh` rate limit handler always shows `walph build` as resume command regardless of actual mode: The `handle_rate_limit()` function in `lib/utils.sh` (line 173) uses `${RESUME_COMMAND:-walph build}` for the resume message. While `goodbunny.sh` correctly exports `RESUME_COMMAND="goodbunny $MODE"` (line 187), `walph.sh` never sets `RESUME_COMMAND` anywhere. If a user is running `walph plan` and hits a rate limit, the prompt tells them to resume with `walph build` instead of `walph plan`.
   - File(s): `walph.sh` (entire file — missing `RESUME_COMMAND` export), `lib/utils.sh` (line 173)
-  - Fix: Add `export RESUME_COMMAND="walph $MODE"` in `walph.sh`'s `init_walph()` function (around line 1550), similar to how `goodbunny.sh` does it at line 157.
+  - Fix: Add `export RESUME_COMMAND="walph $MODE"` in `walph.sh`'s `init_walph()` function (around line 1550), similar to how `goodbunny.sh` does it at line 187.
+  - Note: Fixed by adding `export RESUME_COMMAND="walph $MODE"` in `init_walph()` at line 1042.
 
 ## Medium Priority
 
