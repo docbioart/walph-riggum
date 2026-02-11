@@ -182,9 +182,10 @@
   - File(s): `QUICKSTART.md` (line 250)
   - Fix: Change `ralph_*.log` to `walph_*.log` in the monitoring command as well.
 
-- [ ] **[ERROR HANDLING]** `init.sh` `parse_args` doesn't validate `--stack` argument: In `init.sh` (lines 60-62), `--stack` does `shift 2` without checking if `$2` exists. Running `./init.sh my-project --stack` (without a value) will cause an unbound variable error with `set -u` or a confusing error. This is the same class of bug as the walph.sh/goodbunny.sh argument validation issue, but in a different script.
+- [x] **[ERROR HANDLING]** `init.sh` `parse_args` doesn't validate `--stack` argument: In `init.sh` (lines 60-62), `--stack` does `shift 2` without checking if `$2` exists. Running `./init.sh my-project --stack` (without a value) will cause an unbound variable error with `set -u` or a confusing error. This is the same class of bug as the walph.sh/goodbunny.sh argument validation issue, but in a different script.
   - File(s): `init.sh` (lines 60-62)
   - Fix: Add a check before `shift 2`: `if [[ $# -lt 2 ]]; then log_error "--stack requires a type argument"; exit 1; fi`. Jeeroy already does this correctly.
+  - Note: Fixed by adding validation check before shift operation at lines 65-69. Now properly validates argument existence and shows usage help on error.
 
 - [ ] **[KISS]** `jeeroy.sh` writes `.jeeroy_context.md` to the project directory but doesn't add it to `.gitignore`: In `jeeroy.sh` (line 387), `run_qa_session()` writes a context file to `$PROJECT_DIR/.jeeroy_context.md`. While the file is cleaned up at line 406 with `rm -f`, if the script is interrupted (e.g., Ctrl+C during the interactive Q&A session, before line 406 runs), this file will remain in the project directory and could be accidentally committed. The trap at line 37 only cleans up tracked temp files via `$JEEROY_TEMP_FILES`, but `.jeeroy_context.md` is not tracked in that variable.
   - File(s): `jeeroy.sh` (lines 387, 406)

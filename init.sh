@@ -62,6 +62,11 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --stack)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--stack requires a type argument"
+                    show_usage
+                    exit 1
+                fi
                 STACK="$2"
                 shift 2
                 ;;
