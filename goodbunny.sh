@@ -326,19 +326,15 @@ build_files_section() {
 _gb_template_callback() {
     local full_prompt="$1"
 
-    # Substitute categories and files sections
+    # Substitute categories and files sections using bash parameter expansion
+    # This is safer than sed as it handles arbitrary content without needing escaping
     local categories_section
     categories_section=$(build_categories_section)
-    # Escape sed special characters in replacement string
-    local escaped_categories
-    escaped_categories=$(printf '%s\n' "$categories_section" | sed 's/[&/\]/\\&/g')
-    full_prompt=$(echo "$full_prompt" | sed "s/{{CATEGORIES}}/$escaped_categories/g")
+    full_prompt="${full_prompt//\{\{CATEGORIES\}\}/$categories_section}"
 
     local files_section
     files_section=$(build_files_section)
-    local escaped_files
-    escaped_files=$(printf '%s\n' "$files_section" | sed 's/[&/\]/\\&/g')
-    full_prompt=$(echo "$full_prompt" | sed "s/{{FILES}}/$escaped_files/g")
+    full_prompt="${full_prompt//\{\{FILES\}\}/$files_section}"
 
     echo "$full_prompt"
 }

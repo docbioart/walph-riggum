@@ -55,10 +55,11 @@ run_shared_iteration() {
         return 1
     fi
 
-    # Substitute common variables in prompt
-    full_prompt=$(echo "$full_prompt" | sed "s/{{ITERATION}}/$iteration/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MAX_ITERATIONS}}/$MAX_ITERATIONS/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MODE}}/$MODE/g")
+    # Substitute common variables in prompt using bash parameter expansion
+    # This is safer and more efficient than sed
+    full_prompt="${full_prompt//\{\{ITERATION\}\}/$iteration}"
+    full_prompt="${full_prompt//\{\{MAX_ITERATIONS\}\}/$MAX_ITERATIONS}"
+    full_prompt="${full_prompt//\{\{MODE\}\}/$MODE}"
 
     # Apply tool-specific template substitutions via callback
     if [[ -n "$template_callback" ]] && declare -f "$template_callback" > /dev/null 2>&1; then
