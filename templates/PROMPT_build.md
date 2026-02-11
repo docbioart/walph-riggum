@@ -148,9 +148,12 @@ Do not mark UI tasks complete without verifying the UI actually works in a brows
 
 2. **Commit your changes**:
    ```bash
-   git add -A
+   # Stage only the files you modified (list them explicitly)
+   git add <file1> <file2> <file3>
    git commit -m "feat: [brief description of what was implemented]"
    ```
+
+   **Important**: Never use `git add -A` or `git add .` as they may stage unintended files (temp files, debug logs, etc.). Always explicitly list the files you changed.
 
 ## Guards
 

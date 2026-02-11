@@ -73,9 +73,12 @@ If tests fail:
 
 2. **Commit your changes** with a descriptive message:
    ```bash
-   git add -A
+   # Stage only the files you modified (list them explicitly)
+   git add <file1> <file2> <file3>
    git commit -m "fix: [category] description of what was fixed"
    ```
+
+   **Important**: Never use `git add -A` or `git add .` as they may stage unintended files (temp files, debug logs, etc.). Always explicitly list the files you changed.
 
    Examples:
    - `fix: [security] sanitize user input in login handler`
