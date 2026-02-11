@@ -239,7 +239,7 @@
   - File(s): `init.sh` (line 512)
   - Fix: Change `Edit specs/example.md` to `Copy specs/TEMPLATE.md → specs/your-feature.md` to match what `walph.sh` `run_init()` outputs at line 1312.
 
-- [ ] **[KISS]** `QUICKSTART.md` line 66 also references `specs/example.md` which doesn't exist: In `QUICKSTART.md` (line 66), the text says "Replace `specs/example.md` with your requirements." However, both `walph.sh init` and `init.sh` create `specs/TEMPLATE.md`, not `specs/example.md`. While the template `templates/specs/example.md` exists in the repo, it's never copied to the project by any init command.
+- [x] **[KISS]** `QUICKSTART.md` line 66 also references `specs/example.md` which doesn't exist: In `QUICKSTART.md` (line 66), the text says "Replace `specs/example.md` with your requirements." However, both `walph.sh init` and `init.sh` create `specs/TEMPLATE.md`, not `specs/example.md`. While the template `templates/specs/example.md` exists in the repo, it's never copied to the project by any init command.
   - File(s): `QUICKSTART.md` (line 66)
   - Fix: Change "Replace `specs/example.md`" to "Copy `specs/TEMPLATE.md` to a new file" or "Replace `specs/TEMPLATE.md`" to match the actual files created by both init paths.
 

@@ -63,7 +63,7 @@ Walph will:
 
 ## Step 2: Write Your Spec
 
-Replace `specs/example.md` with your requirements. Walph reads ALL `.md` files in `specs/`.
+Copy `specs/TEMPLATE.md` to a new file with your requirements. Walph reads ALL `.md` files in `specs/`.
 
 ### Spec Template
 
