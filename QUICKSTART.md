@@ -165,7 +165,7 @@ Output: 302 redirect to https://google.com
 
 ## Step 3: Configure AGENTS.md
 
-Tell Ralph how to build and test your project:
+Tell Walph how to build and test your project:
 
 ```markdown
 # Project: my-project
@@ -258,7 +258,7 @@ git log --oneline
 
 ---
 
-## When Ralph Stops
+## When Walph Stops
 
 | Condition | Meaning |
 |-----------|---------|
@@ -329,6 +329,6 @@ my-project/
 1. **Start small** - First project should be simple (like the calculator example)
 2. **Be specific in specs** - Vague requirements = vague results
 3. **Include examples** - Show expected inputs/outputs
-4. **List files to create** - Helps Ralph understand scope
+4. **List files to create** - Helps Walph understand scope
 5. **Review the plan** - Edit `IMPLEMENTATION_PLAN.md` before building if needed
 6. **Watch the logs** - `tail -f .walph/logs/*.log`

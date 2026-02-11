@@ -197,7 +197,7 @@
   - Fix: Extract the chrome-devtools MCP detection into a shared function in `lib/utils.sh` (e.g., `check_chrome_mcp()`) and call it from both scripts.
   - Note: Fixed by creating `check_chrome_mcp()` function in `lib/utils.sh` (lines 45-68). Updated `jeeroy.sh` (lines 272-276) to use shared function. Updated `install.sh` to source `lib/utils.sh` and use shared function (lines 10, 44-49).
 
-- [ ] **[KISS]** `QUICKSTART.md` references `Ralph` as the tool name in several user-facing messages: In `QUICKSTART.md`, lines 167, 261, 333, and 334 refer to "Ralph" (e.g., "Tell Ralph how to build", "When Ralph Stops", "List files to create — Helps Ralph understand scope"). The project has been renamed from Ralph to Walph, and these stale references may confuse users who only know the tool as "Walph."
+- [x] **[KISS]** `QUICKSTART.md` references `Ralph` as the tool name in several user-facing messages: In `QUICKSTART.md`, lines 167, 261, 333, and 334 refer to "Ralph" (e.g., "Tell Ralph how to build", "When Ralph Stops", "List files to create — Helps Ralph understand scope"). The project has been renamed from Ralph to Walph, and these stale references may confuse users who only know the tool as "Walph."
   - File(s): `QUICKSTART.md` (lines 167, 261, 333, 334)
   - Fix: Replace "Ralph" with "Walph" in the user-facing text of `QUICKSTART.md`. Note: the `specs/README.md` template in `init.sh` (line 242) also references "Ralph" — change to "Walph" there too.
 

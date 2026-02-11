@@ -183,7 +183,7 @@ Put your feature specs in this directory. Walph reads ALL `.md` files here.
 | Overview | What and why (1-2 sentences) |
 | Requirements | Specific, testable requirements |
 | Technical Details | Files, APIs, data structures |
-| Acceptance Criteria | Checkboxes Ralph can verify |
+| Acceptance Criteria | Checkboxes Walph can verify |
 | Examples | Input/output pairs |
 EOF
 
