@@ -1,0 +1,3 @@
+build_cmd=cargo build
+test_cmd=cargo test
+lint_cmd=cargo clippy

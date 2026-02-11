@@ -3,6 +3,27 @@
 # Shared project setup functions for Walph and init.sh
 # This consolidates AGENTS.md generation logic
 
+# Get the script directory (templates are relative to this)
+_get_template_dir() {
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    echo "$script_dir/../templates/agents"
+}
+
+# Load template file and substitute variables
+# Usage: _load_template <template_file> <project_name>
+_load_template() {
+    local template_file="$1"
+    local project_name="$2"
+
+    if [[ ! -f "$template_file" ]]; then
+        return 1
+    fi
+
+    # Read and substitute {{PROJECT_NAME}}
+    sed "s/{{PROJECT_NAME}}/$project_name/g" "$template_file"
+}
+
 # Generate AGENTS.md with support for basic and detailed modes
 # Usage: create_agents_md <target_dir> <stack> [template] [project_name] [docker] [postgres]
 create_agents_md() {
@@ -13,218 +34,50 @@ create_agents_md() {
     local docker="${5:-false}"
     local postgres="${6:-false}"
 
+    local template_dir
+    template_dir="$(_get_template_dir)"
+
     local build_cmd test_cmd lint_cmd structure notes
 
-    # Set defaults based on stack
-    case "$stack" in
-        node)
-            build_cmd="npm run build"
-            test_cmd="npm test"
-            lint_cmd="npm run lint"
-            ;;
-        python)
-            build_cmd="pip install -e ."
-            test_cmd="pytest"
-            lint_cmd="ruff check ."
-            ;;
-        swift)
-            build_cmd="swift build"
-            test_cmd="swift test"
-            lint_cmd="swiftlint"
-            ;;
-        kotlin)
-            build_cmd="./gradlew assembleDebug"
-            test_cmd="./gradlew test"
-            lint_cmd="./gradlew ktlintCheck"
-            ;;
-        go)
-            build_cmd="go build ./..."
-            test_cmd="go test ./..."
-            lint_cmd="golangci-lint run"
-            ;;
-        rust)
-            build_cmd="cargo build"
-            test_cmd="cargo test"
-            lint_cmd="cargo clippy"
-            ;;
-        both)
-            # Legacy support for init.sh
-            build_cmd="npm run build && pip install -e ."
-            test_cmd="npm test && pytest"
-            lint_cmd="npm run lint && ruff check ."
-            ;;
-        *)
-            build_cmd="# Add your build command"
-            test_cmd="# Add your test command"
-            lint_cmd="# Add your lint command"
-            ;;
-    esac
+    # Load stack-specific commands from template file
+    local stack_file="$template_dir/stacks/${stack}.txt"
+    if [[ -f "$stack_file" ]]; then
+        # Read stack file and extract commands
+        build_cmd=$(grep "^build_cmd=" "$stack_file" | cut -d= -f2-)
+        test_cmd=$(grep "^test_cmd=" "$stack_file" | cut -d= -f2-)
+        lint_cmd=$(grep "^lint_cmd=" "$stack_file" | cut -d= -f2-)
+    else
+        # Unknown stack - use defaults
+        build_cmd="# Add your build command"
+        test_cmd="# Add your test command"
+        lint_cmd="# Add your lint command"
+    fi
 
-    # Override/extend based on template (if provided)
+    # Load template-specific structure and notes
     if [[ -n "$template" ]]; then
+        local template_file=""
+
+        # Determine which template file to use
         case "$template" in
             api)
                 if [[ "$stack" == "node" ]]; then
-                    structure="$project_name/
-├── src/
-│   ├── routes/        # API route handlers
-│   ├── services/      # Business logic
-│   ├── middleware/    # Express middleware
-│   └── index.js       # Entry point
-├── tests/
-├── package.json
-└── specs/"
-                    notes="- Use Express.js for the API framework
-- Follow RESTful conventions
-- Validate all inputs
-- Return appropriate HTTP status codes
-- Write integration tests for endpoints"
+                    template_file="$template_dir/templates/api-node.txt"
                 else
-                    structure="$project_name/
-├── src/
-│   ├── routes/        # API route handlers
-│   ├── services/      # Business logic
-│   └── main.py        # Entry point
-├── tests/
-├── requirements.txt
-└── specs/"
-                    notes="- Use FastAPI for the API framework
-- Follow RESTful conventions
-- Use Pydantic for validation
-- Return appropriate HTTP status codes"
+                    template_file="$template_dir/templates/api-python.txt"
                 fi
                 ;;
-
-            fullstack)
-                structure="$project_name/
-├── src/
-│   ├── api/           # Backend API
-│   ├── web/           # Frontend
-│   └── db/            # Database migrations
-├── docker/
-├── docker-compose.yml
-├── package.json
-└── specs/"
-                notes="- API in src/api/, frontend in src/web/
-- Use environment variables for config
-- Database migrations in src/db/
-- docker-compose up for local development"
-                ;;
-
             cli)
                 if [[ "$stack" == "node" ]]; then
-                    structure="$project_name/
-├── src/
-│   ├── commands/      # Command implementations
-│   ├── utils/         # Helper functions
-│   └── cli.js         # Entry point
-├── bin/               # Executable scripts
-├── tests/
-├── package.json
-└── specs/"
-                    notes="- Use commander.js or yargs for argument parsing
-- Support --help and --version flags
-- Exit with appropriate codes (0=success, 1=error)
-- Write tests for each command"
+                    template_file="$template_dir/templates/cli-node.txt"
                 else
-                    structure="$project_name/
-├── src/
-│   ├── commands/      # Command implementations
-│   ├── utils/         # Helper functions
-│   └── cli.py         # Entry point
-├── tests/
-├── setup.py
-└── specs/"
-                    notes="- Use click or argparse for argument parsing
-- Support --help and --version flags
-- Exit with appropriate codes
-- Make it installable via pip"
+                    template_file="$template_dir/templates/cli-python.txt"
                 fi
                 ;;
-
-            ios)
-                build_cmd="xcodebuild -project $project_name.xcodeproj -scheme $project_name -destination 'platform=iOS Simulator,name=iPhone 15' build"
-                test_cmd="xcodebuild -project $project_name.xcodeproj -scheme $project_name -destination 'platform=iOS Simulator,name=iPhone 15' test"
-                structure="$project_name/
-├── $project_name/
-│   ├── App/           # App entry point
-│   ├── Views/         # SwiftUI views
-│   ├── Models/        # Data models
-│   ├── ViewModels/    # View models
-│   ├── Services/      # API/data services
-│   └── Resources/     # Assets, strings
-├── ${project_name}Tests/
-├── $project_name.xcodeproj
-└── specs/"
-                notes="- Use SwiftUI for UI
-- Follow MVVM architecture
-- Use Combine for reactive programming
-- Support iOS 16+
-- Use Swift Package Manager for dependencies
-- Write XCTest unit tests"
+            fullstack|ios|android|capacitor|monorepo)
+                template_file="$template_dir/templates/${template}.txt"
                 ;;
-
-            android)
-                structure="$project_name/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/example/$project_name/
-│   │   │   ├── ui/           # Compose UI
-│   │   │   ├── data/         # Repositories, data sources
-│   │   │   ├── domain/       # Use cases, models
-│   │   │   └── MainActivity.kt
-│   │   └── res/              # Resources
-│   └── build.gradle.kts
-├── build.gradle.kts
-└── specs/"
-                notes="- Use Jetpack Compose for UI
-- Follow MVVM architecture
-- Use Kotlin Coroutines for async
-- Support Android API 26+
-- Use Hilt for dependency injection
-- Write JUnit tests"
-                ;;
-
-            capacitor)
-                build_cmd="npm run build && npx cap sync"
-                test_cmd="npm test"
-                structure="$project_name/
-├── src/               # Web app source (React/Vue/etc)
-│   ├── components/
-│   ├── pages/
-│   └── services/
-├── ios/               # iOS native project
-├── android/           # Android native project
-├── capacitor.config.ts
-├── package.json
-└── specs/"
-                notes="- Web app in src/, built with Vite/webpack
-- Run 'npx cap sync' after web build
-- iOS: open ios/App/App.xcworkspace in Xcode
-- Android: open android/ in Android Studio
-- Use Capacitor plugins for native features
-- Test web version first, then native"
-                ;;
-
-            monorepo)
-                build_cmd="npm run build --workspaces"
-                test_cmd="npm test --workspaces"
-                lint_cmd="npm run lint --workspaces"
-                structure="$project_name/
-├── packages/
-│   ├── api/           # Backend service
-│   ├── web/           # Frontend app
-│   └── shared/        # Shared utilities/types
-├── package.json       # Workspace root
-└── specs/"
-                notes="- Use npm/yarn/pnpm workspaces
-- Shared code in packages/shared
-- Each package has its own package.json
-- Import shared code: @$project_name/shared"
-                ;;
-
             *)
-                # Default structure
+                # Default structure for unknown templates
                 structure="$project_name/
 ├── src/               # Source code
 ├── tests/             # Test files
@@ -233,6 +86,26 @@ create_agents_md() {
 - Write tests for new functionality"
                 ;;
         esac
+
+        # Load and parse template file if it exists
+        if [[ -n "$template_file" ]] && [[ -f "$template_file" ]]; then
+            local template_content
+            template_content=$(_load_template "$template_file" "$project_name")
+
+            # Extract structure and notes from template content
+            structure=$(echo "$template_content" | sed -n '/^structure=/,/^notes=/p' | sed '1s/^structure=//;$d')
+            notes=$(echo "$template_content" | sed -n '/^notes=/,$p' | sed '1s/^notes=//')
+
+            # Override build/test commands if specified in template
+            local template_build_cmd template_test_cmd template_lint_cmd
+            template_build_cmd=$(echo "$template_content" | grep "^build_cmd=" | cut -d= -f2-)
+            template_test_cmd=$(echo "$template_content" | grep "^test_cmd=" | cut -d= -f2-)
+            template_lint_cmd=$(echo "$template_content" | grep "^lint_cmd=" | cut -d= -f2-)
+
+            [[ -n "$template_build_cmd" ]] && build_cmd="$template_build_cmd"
+            [[ -n "$template_test_cmd" ]] && test_cmd="$template_test_cmd"
+            [[ -n "$template_lint_cmd" ]] && lint_cmd="$template_lint_cmd"
+        fi
     else
         # Basic mode - no template-specific structure
         structure="<!-- Describe your project structure here -->"

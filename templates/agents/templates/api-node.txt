@@ -1,0 +1,14 @@
+structure={{PROJECT_NAME}}/
+├── src/
+│   ├── routes/        # API route handlers
+│   ├── services/      # Business logic
+│   ├── middleware/    # Express middleware
+│   └── index.js       # Entry point
+├── tests/
+├── package.json
+└── specs/
+notes=- Use Express.js for the API framework
+- Follow RESTful conventions
+- Validate all inputs
+- Return appropriate HTTP status codes
+- Write integration tests for endpoints

@@ -1,0 +1,13 @@
+structure={{PROJECT_NAME}}/
+├── src/
+│   ├── api/           # Backend API
+│   ├── web/           # Frontend
+│   └── db/            # Database migrations
+├── docker/
+├── docker-compose.yml
+├── package.json
+└── specs/
+notes=- API in src/api/, frontend in src/web/
+- Use environment variables for config
+- Database migrations in src/db/
+- docker-compose up for local development

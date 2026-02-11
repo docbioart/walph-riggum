@@ -1,0 +1,13 @@
+structure={{PROJECT_NAME}}/
+├── src/
+│   ├── commands/      # Command implementations
+│   ├── utils/         # Helper functions
+│   └── cli.js         # Entry point
+├── bin/               # Executable scripts
+├── tests/
+├── package.json
+└── specs/
+notes=- Use commander.js or yargs for argument parsing
+- Support --help and --version flags
+- Exit with appropriate codes (0=success, 1=error)
+- Write tests for each command

@@ -1,0 +1,18 @@
+build_cmd=npm run build && npx cap sync
+test_cmd=npm test
+structure={{PROJECT_NAME}}/
+├── src/               # Web app source (React/Vue/etc)
+│   ├── components/
+│   ├── pages/
+│   └── services/
+├── ios/               # iOS native project
+├── android/           # Android native project
+├── capacitor.config.ts
+├── package.json
+└── specs/
+notes=- Web app in src/, built with Vite/webpack
+- Run 'npx cap sync' after web build
+- iOS: open ios/App/App.xcworkspace in Xcode
+- Android: open android/ in Android Studio
+- Use Capacitor plugins for native features
+- Test web version first, then native

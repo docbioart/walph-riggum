@@ -1,0 +1,18 @@
+structure={{PROJECT_NAME}}/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/example/{{PROJECT_NAME}}/
+│   │   │   ├── ui/           # Compose UI
+│   │   │   ├── data/         # Repositories, data sources
+│   │   │   ├── domain/       # Use cases, models
+│   │   │   └── MainActivity.kt
+│   │   └── res/              # Resources
+│   └── build.gradle.kts
+├── build.gradle.kts
+└── specs/
+notes=- Use Jetpack Compose for UI
+- Follow MVVM architecture
+- Use Kotlin Coroutines for async
+- Support Android API 26+
+- Use Hilt for dependency injection
+- Write JUnit tests

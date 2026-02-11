@@ -1,0 +1,3 @@
+build_cmd=npm run build
+test_cmd=npm test
+lint_cmd=npm run lint

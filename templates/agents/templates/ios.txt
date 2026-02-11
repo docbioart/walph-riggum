@@ -1,0 +1,19 @@
+build_cmd=xcodebuild -project {{PROJECT_NAME}}.xcodeproj -scheme {{PROJECT_NAME}} -destination 'platform=iOS Simulator,name=iPhone 15' build
+test_cmd=xcodebuild -project {{PROJECT_NAME}}.xcodeproj -scheme {{PROJECT_NAME}} -destination 'platform=iOS Simulator,name=iPhone 15' test
+structure={{PROJECT_NAME}}/
+├── {{PROJECT_NAME}}/
+│   ├── App/           # App entry point
+│   ├── Views/         # SwiftUI views
+│   ├── Models/        # Data models
+│   ├── ViewModels/    # View models
+│   ├── Services/      # API/data services
+│   └── Resources/     # Assets, strings
+├── {{PROJECT_NAME}}Tests/
+├── {{PROJECT_NAME}}.xcodeproj
+└── specs/
+notes=- Use SwiftUI for UI
+- Follow MVVM architecture
+- Use Combine for reactive programming
+- Support iOS 16+
+- Use Swift Package Manager for dependencies
+- Write XCTest unit tests

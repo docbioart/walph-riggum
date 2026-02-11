@@ -1,0 +1,12 @@
+structure={{PROJECT_NAME}}/
+├── src/
+│   ├── commands/      # Command implementations
+│   ├── utils/         # Helper functions
+│   └── cli.py         # Entry point
+├── tests/
+├── setup.py
+└── specs/
+notes=- Use click or argparse for argument parsing
+- Support --help and --version flags
+- Exit with appropriate codes
+- Make it installable via pip

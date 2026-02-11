@@ -1,0 +1,3 @@
+build_cmd=swift build
+test_cmd=swift test
+lint_cmd=swiftlint

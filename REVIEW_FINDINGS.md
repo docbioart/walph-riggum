@@ -71,7 +71,7 @@
   - Fix: Extract the `init` command logic (lines 1086-1317) into a separate file (it already partially exists as `init.sh`). Extract the `setup` command logic (lines 335-673) into `lib/setup.sh`. Keep `walph.sh` as a thin dispatcher that sources the relevant command module.
   - Note: Extracted setup command logic (parse_setup_args, show_setup_help, detect_stack, run_setup) to `lib/setup_command.sh`. File reduced from 1085 lines to 825 lines (260-line reduction). Init command logic extraction deferred to finding #85 which addresses init.sh duplication.
 
-- [ ] **[COMPLEXITY]** `create_agents_md()` in `walph.sh` is 257 lines with deep case nesting: The function at lines 676-933 in `walph.sh` has nested `case` statements (template inside stack) with large heredoc blocks for each combination. This creates a combinatorial explosion that's hard to maintain.
+- [x] **[COMPLEXITY]** `create_agents_md()` in `walph.sh` is 257 lines with deep case nesting: The function at lines 676-933 in `walph.sh` has nested `case` statements (template inside stack) with large heredoc blocks for each combination. This creates a combinatorial explosion that's hard to maintain.
   - File(s): `walph.sh` (lines 676-933)
   - Fix: Use template files instead of inline heredocs. Create template fragments in `templates/agents/` for each stack and template combination, and assemble them in the function using variable substitution.
 

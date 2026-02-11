@@ -1,0 +1,12 @@
+structure={{PROJECT_NAME}}/
+├── src/
+│   ├── routes/        # API route handlers
+│   ├── services/      # Business logic
+│   └── main.py        # Entry point
+├── tests/
+├── requirements.txt
+└── specs/
+notes=- Use FastAPI for the API framework
+- Follow RESTful conventions
+- Use Pydantic for validation
+- Return appropriate HTTP status codes

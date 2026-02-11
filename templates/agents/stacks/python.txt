@@ -1,0 +1,3 @@
+build_cmd=pip install -e .
+test_cmd=pytest
+lint_cmd=ruff check .
