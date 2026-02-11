@@ -28,7 +28,7 @@
   - File(s): `lib/status_parser.sh` (lines 159-169)
   - Fix: Restrict error extraction to the last ~20 lines of output (where actual errors would appear), or only match patterns that indicate actual failures (e.g., lines starting with "Error:" or containing "FAILED" in test output). Consider also looking specifically at Claude's exit code rather than parsing output text.
 
-- [ ] **[DRY]** `run_iteration()` is almost entirely duplicated between `walph.sh` and `goodbunny.sh`: The `run_iteration()` function in `walph.sh` (lines 1323-1455) and `goodbunny.sh` (lines 295-447) are ~90% identical. Both create temp files, run Claude with background PID watchdog, handle timeout, check rate limits, check API errors, parse status, update circuit breaker, and check completion. The only differences are the template variable substitutions (goodbunny adds `{{CATEGORIES}}` and `{{FILES}}`).
+- [x] **[DRY]** `run_iteration()` is almost entirely duplicated between `walph.sh` and `goodbunny.sh`: The `run_iteration()` function in `walph.sh` (lines 1323-1455) and `goodbunny.sh` (lines 295-447) are ~90% identical. Both create temp files, run Claude with background PID watchdog, handle timeout, check rate limits, check API errors, parse status, update circuit breaker, and check completion. The only differences are the template variable substitutions (goodbunny adds `{{CATEGORIES}}` and `{{FILES}}`).
   - File(s): `walph.sh` (lines 1323-1455), `goodbunny.sh` (lines 295-447)
   - Fix: Extract the shared iteration runner logic into a new `lib/runner.sh` library file. The function should accept a callback or additional parameters for tool-specific template substitutions. Both `walph.sh` and `goodbunny.sh` should source and call this shared function.
 

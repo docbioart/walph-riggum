@@ -23,6 +23,7 @@ source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/lib/runner.sh"
 
 # ============================================================================
 # GOOD BUNNY DEFAULTS
@@ -313,27 +314,9 @@ build_files_section() {
 # ITERATION RUNNER
 # ============================================================================
 
-run_iteration() {
-    local iteration="$1"
-    local prompt_file="$2"
-    local model="$3"
-
-    log_iteration_start "$iteration" "$MAX_ITERATIONS" "$MODE"
-
-    # Build the prompt
-    local full_prompt=""
-
-    if [[ -f "$prompt_file" ]]; then
-        full_prompt=$(cat "$prompt_file")
-    else
-        log_error "Prompt file not found: $prompt_file"
-        return 1
-    fi
-
-    # Substitute template variables
-    full_prompt=$(echo "$full_prompt" | sed "s/{{ITERATION}}/$iteration/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MAX_ITERATIONS}}/$MAX_ITERATIONS/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MODE}}/$MODE/g")
+# Callback for Good Bunny specific template substitutions
+_gb_template_callback() {
+    local full_prompt="$1"
 
     # Substitute categories and files sections
     local categories_section
@@ -349,124 +332,27 @@ run_iteration() {
     escaped_files=$(printf '%s\n' "$files_section" | sed 's/[&/\]/\\&/g')
     full_prompt=$(echo "$full_prompt" | sed "s/{{FILES}}/$escaped_files/g")
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "[DRY RUN] Would run Claude with:"
-        echo "  Model: $model"
-        echo "  Prompt file: $prompt_file"
-        echo "  Mode: $MODE"
-        if [[ -n "$CATEGORIES_FILTER" ]]; then
-            echo "  Categories: $CATEGORIES_FILTER"
-        fi
-        if [[ -n "$FILES_FILTER" ]]; then
-            echo "  Files: $FILES_FILTER"
-        fi
-        echo ""
-        echo "  Prompt preview (first 20 lines):"
-        echo "$full_prompt" | head -20 | sed 's/^/    /'
-        echo "    ..."
-        return 0
+    echo "$full_prompt"
+}
+
+# Callback for Good Bunny specific dry run information
+_gb_dryrun_callback() {
+    if [[ -n "$CATEGORIES_FILTER" ]]; then
+        echo "  Categories: $CATEGORIES_FILTER"
     fi
-
-    # Run Claude
-    local timeout="${ITERATION_TIMEOUT:-900}"
-    log_info "Running Claude ($model)... (timeout: ${timeout}s)"
-
-    local output
-    local exit_code=0
-
-    # Create temp files for prompt input and output capture
-    local temp_prompt
-    temp_prompt=$(mktemp)
-    printf '%s' "$full_prompt" > "$temp_prompt"
-
-    local temp_output
-    temp_output=$(mktemp)
-
-    # Run Claude in the background with a timeout watchdog
-    claude -p \
-        --dangerously-skip-permissions \
-        --model "$model" \
-        < "$temp_prompt" \
-        > "$temp_output" 2>&1 &
-    local claude_pid=$!
-
-    # Watchdog: wait up to $timeout seconds for Claude to finish
-    local elapsed=0
-    while kill -0 "$claude_pid" 2>/dev/null; do
-        if [[ $elapsed -ge $timeout ]]; then
-            log_warn "Claude has been running for ${timeout}s — killing stuck process"
-            kill "$claude_pid" 2>/dev/null
-            sleep 2
-            kill -9 "$claude_pid" 2>/dev/null
-            wait "$claude_pid" 2>/dev/null
-            exit_code=124
-            break
-        fi
-        sleep 5
-        elapsed=$((elapsed + 5))
-    done
-
-    # If it exited on its own, collect the real exit code
-    if [[ $exit_code -ne 124 ]]; then
-        wait "$claude_pid"
-        exit_code=$?
+    if [[ -n "$FILES_FILTER" ]]; then
+        echo "  Files: $FILES_FILTER"
     fi
+}
 
-    rm -f "$temp_prompt"
+run_iteration() {
+    local iteration="$1"
+    local prompt_file="$2"
+    local model="$3"
 
-    # Stream output to terminal
-    cat "$temp_output"
-    output=$(cat "$temp_output")
-    rm -f "$temp_output"
-
-    # Handle timeout
-    if [[ $exit_code -eq 124 ]]; then
-        log_error "Iteration timed out after ${timeout}s"
-        log_info "Claude may have stalled. The next iteration will retry."
-        log_info "Adjust ITERATION_TIMEOUT in $GB_DIR/config if needed."
-    fi
-
-    # Log the output
-    log_claude_output "$output"
-
-    # Check for rate limit
-    if check_rate_limit "$output"; then
-        handle_rate_limit "$output"
-        local rate_limit_choice=$?
-        if [[ $rate_limit_choice -eq 2 ]]; then
-            return 2  # Exit signal
-        fi
-    fi
-
-    # Check for API error
-    if check_api_error "$output"; then
-        log_error "API error detected"
-        local error_msg
-        error_msg=$(extract_error_message "$output")
-        if [[ -n "$error_msg" ]]; then
-            log_error "$error_msg"
-        fi
-    fi
-
-    # Parse status
-    local status_summary
-    status_summary=$(get_status_summary "$output")
-    log_info "Status: $status_summary"
-
-    # Update circuit breaker
-    local error_msg
-    error_msg=$(extract_error_message "$output")
-    update_circuit_breaker "$output" "$error_msg"
-
-    # Check for completion
-    if check_completion "$output"; then
-        log_success "Completion signal received!"
-        # Write signal file so main_loop breaks after this iteration
-        touch "$PROJECT_DIR/$GB_STATE_DIR/completion_signal"
-        return 0
-    fi
-
-    return "$exit_code"
+    # Call the shared iteration runner with Good Bunny specific callbacks
+    run_shared_iteration "$iteration" "$prompt_file" "$model" "$GB_STATE_DIR" \
+        "_gb_template_callback" "_gb_dryrun_callback"
 }
 
 # ============================================================================

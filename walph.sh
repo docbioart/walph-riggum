@@ -17,6 +17,7 @@ source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/lib/runner.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
@@ -1325,135 +1326,9 @@ run_iteration() {
     local prompt_file="$2"
     local model="$3"
 
-    log_iteration_start "$iteration" "$MAX_ITERATIONS" "$MODE"
-
-    # Build the prompt
-    local full_prompt=""
-
-    # Add prompt template
-    if [[ -f "$prompt_file" ]]; then
-        full_prompt=$(cat "$prompt_file")
-    else
-        log_error "Prompt file not found: $prompt_file"
-        return 1
-    fi
-
-    # Substitute variables in prompt
-    full_prompt=$(echo "$full_prompt" | sed "s/{{ITERATION}}/$iteration/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MAX_ITERATIONS}}/$MAX_ITERATIONS/g")
-    full_prompt=$(echo "$full_prompt" | sed "s/{{MODE}}/$MODE/g")
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "[DRY RUN] Would run Claude with:"
-        echo "  Model: $model"
-        echo "  Prompt file: $prompt_file"
-        echo "  Mode: $MODE"
-        return 0
-    fi
-
-    # Run Claude
-    local timeout="${ITERATION_TIMEOUT:-900}"
-    log_info "Running Claude ($model)... (timeout: ${timeout}s)"
-
-    local output
-    local exit_code=0
-
-    # Create temp files for prompt input and output capture
-    local temp_prompt
-    temp_prompt=$(mktemp)
-    printf '%s' "$full_prompt" > "$temp_prompt"
-
-    local temp_output
-    temp_output=$(mktemp)
-
-    # Run Claude in the background with a timeout watchdog.
-    # Using a temp file for input (not pipe) ensures clean EOF delivery.
-    # The background PID lets us kill it if it exceeds the timeout.
-    claude -p \
-        --dangerously-skip-permissions \
-        --model "$model" \
-        < "$temp_prompt" \
-        > "$temp_output" 2>&1 &
-    local claude_pid=$!
-
-    # Watchdog: wait up to $timeout seconds for Claude to finish
-    local elapsed=0
-    while kill -0 "$claude_pid" 2>/dev/null; do
-        if [[ $elapsed -ge $timeout ]]; then
-            log_warn "Claude has been running for ${timeout}s — killing stuck process"
-            kill "$claude_pid" 2>/dev/null
-            # Give it a moment to die, then force-kill
-            sleep 2
-            kill -9 "$claude_pid" 2>/dev/null
-            wait "$claude_pid" 2>/dev/null
-            exit_code=124  # Same exit code as GNU timeout
-            break
-        fi
-        sleep 5
-        elapsed=$((elapsed + 5))
-    done
-
-    # If it exited on its own, collect the real exit code
-    if [[ $exit_code -ne 124 ]]; then
-        wait "$claude_pid"
-        exit_code=$?
-    fi
-
-    rm -f "$temp_prompt"
-
-    # Stream output to terminal (tee equivalent, after the fact)
-    cat "$temp_output"
-    output=$(cat "$temp_output")
-    rm -f "$temp_output"
-
-    # Handle timeout
-    if [[ $exit_code -eq 124 ]]; then
-        log_error "Iteration timed out after ${timeout}s"
-        log_info "Claude may have stalled on an API call or long-running task"
-        log_info "The next iteration will retry. Adjust ITERATION_TIMEOUT in .walph/config if needed."
-    fi
-
-    # Log the output
-    log_claude_output "$output"
-
-    # Check for rate limit
-    if check_rate_limit "$output"; then
-        handle_rate_limit "$output"
-        local rate_limit_choice=$?
-        if [[ $rate_limit_choice -eq 2 ]]; then
-            return 2  # Exit signal
-        fi
-    fi
-
-    # Check for API error
-    if check_api_error "$output"; then
-        log_error "API error detected"
-        local error_msg
-        error_msg=$(extract_error_message "$output")
-        if [[ -n "$error_msg" ]]; then
-            log_error "$error_msg"
-        fi
-    fi
-
-    # Parse status
-    local status_summary
-    status_summary=$(get_status_summary "$output")
-    log_info "Status: $status_summary"
-
-    # Update circuit breaker
-    local error_msg
-    error_msg=$(extract_error_message "$output")
-    update_circuit_breaker "$output" "$error_msg"
-
-    # Check for completion
-    if check_completion "$output"; then
-        log_success "Completion signal received!"
-        # Write signal file so main_loop breaks after this iteration
-        touch "$PROJECT_DIR/$STATE_DIR/completion_signal"
-        return 0
-    fi
-
-    return "$exit_code"
+    # Walph has no additional template substitutions beyond the common ones
+    # Call the shared iteration runner
+    run_shared_iteration "$iteration" "$prompt_file" "$model" "$STATE_DIR"
 }
 
 main_loop() {
