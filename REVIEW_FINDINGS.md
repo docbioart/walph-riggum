@@ -235,7 +235,7 @@
   - Fix: Use explicit file staging for only the files Walph created: `git add .walph/ specs/ AGENTS.md IMPLEMENTATION_PLAN.md .gitignore`. Remove `2>/dev/null || true` or at minimum log a warning on failure instead of silently ignoring it.
   - Note: Fixed by replacing `git add .` with explicit staging of only Walph-created files (`git add .walph/ specs/ AGENTS.md IMPLEMENTATION_PLAN.md .gitignore`, plus Docker files if `--docker` flag is used). Replaced `2>/dev/null || true` with proper error handling that logs warnings on failure.
 
-- [ ] **[KISS]** `init.sh` refers to nonexistent `specs/example.md` in the "Next steps" output: In `init.sh` (line 512), the next steps message says `Edit specs/example.md with your requirements`, but the function `create_example_spec()` (lines 205-306) creates `specs/TEMPLATE.md` and `specs/README.md` — there is no `specs/example.md`. Users following these instructions will look for a file that doesn't exist.
+- [x] **[KISS]** `init.sh` refers to nonexistent `specs/example.md` in the "Next steps" output: In `init.sh` (line 512), the next steps message says `Edit specs/example.md with your requirements`, but the function `create_example_spec()` (lines 205-306) creates `specs/TEMPLATE.md` and `specs/README.md` — there is no `specs/example.md`. Users following these instructions will look for a file that doesn't exist.
   - File(s): `init.sh` (line 512)
   - Fix: Change `Edit specs/example.md` to `Copy specs/TEMPLATE.md → specs/your-feature.md` to match what `walph.sh` `run_init()` outputs at line 1312.
 

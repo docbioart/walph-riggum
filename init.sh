@@ -329,7 +329,7 @@ main() {
     echo ""
     echo "Next steps:"
     echo "  1. cd $PROJECT_NAME"
-    echo "  2. Edit specs/example.md with your requirements"
+    echo "  2. Copy specs/TEMPLATE.md → specs/your-feature.md"
     echo "  3. Run: ../walph.sh plan"
     echo "  4. Review IMPLEMENTATION_PLAN.md"
     echo "  5. Run: ../walph.sh build"
