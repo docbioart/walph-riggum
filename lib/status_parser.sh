@@ -149,8 +149,22 @@ check_rate_limit() {
 check_api_error() {
     local output="$1"
 
-    if echo "$output" | grep -qi "api.error\|server.error\|500\|503\|overloaded"; then
+    # Match specific error patterns from Claude CLI/API, not arbitrary mentions of status codes
+    # Check only the last 10 lines where real errors typically appear
+    local last_lines
+    last_lines=$(echo "$output" | tail -10)
+
+    if echo "$last_lines" | grep -qi "api.error\|server.error"; then
         return 0  # API error
+    fi
+    if echo "$last_lines" | grep -qi "Error: 500\|HTTP 500\|Internal Server Error"; then
+        return 0  # HTTP 500 error
+    fi
+    if echo "$last_lines" | grep -qi "Error: 503\|HTTP 503\|Service Unavailable"; then
+        return 0  # HTTP 503 error
+    fi
+    if echo "$last_lines" | grep -qi "overloaded\|server is overloaded"; then
+        return 0  # Server overload
     fi
     return 1  # No API error
 }

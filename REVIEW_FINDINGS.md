@@ -20,7 +20,7 @@
 
 ## High Priority
 
-- [ ] **[ERROR HANDLING]** `check_api_error` has overly broad pattern matching that causes false positives: In `lib/status_parser.sh` (line 152), the function `check_api_error()` greps for `500|503|overloaded` in the raw Claude output. Since Claude output can contain arbitrary text (including code examples, documentation, or log output that mention "500" or "503"), this will trigger false API error detection on benign output. For example, Claude writing "HTTP status 500 handling" or a log line containing port 5003 would match.
+- [x] **[ERROR HANDLING]** `check_api_error` has overly broad pattern matching that causes false positives: In `lib/status_parser.sh` (line 152), the function `check_api_error()` greps for `500|503|overloaded` in the raw Claude output. Since Claude output can contain arbitrary text (including code examples, documentation, or log output that mention "500" or "503"), this will trigger false API error detection on benign output. For example, Claude writing "HTTP status 500 handling" or a log line containing port 5003 would match.
   - File(s): `lib/status_parser.sh` (lines 149-156)
   - Fix: Make the pattern more specific. Match actual error patterns like `"Error: 500"`, `"HTTP 503"`, `"Internal Server Error"`, or look for specific Claude CLI error message formats. Consider anchoring patterns or matching against only the last ~10 lines of output where real errors appear.
 
