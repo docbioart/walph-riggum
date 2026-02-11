@@ -16,6 +16,28 @@
 
 set -euo pipefail
 
+# Track temp files for cleanup on exit
+RUNNER_TEMP_FILES=""
+
+cleanup_runner_temp_files() {
+    if [[ -n "$RUNNER_TEMP_FILES" ]]; then
+        for f in $RUNNER_TEMP_FILES; do
+            rm -f "$f" 2>/dev/null
+        done
+        RUNNER_TEMP_FILES=""
+    fi
+}
+
+trap cleanup_runner_temp_files EXIT INT TERM
+
+# Create a tracked temp file
+make_runner_temp() {
+    local tmp
+    tmp=$(mktemp)
+    RUNNER_TEMP_FILES="$RUNNER_TEMP_FILES $tmp"
+    echo "$tmp"
+}
+
 # Run a single iteration of the autonomous loop
 #
 # Parameters:
@@ -89,11 +111,11 @@ run_shared_iteration() {
 
     # Create temp files for prompt input and output capture
     local temp_prompt
-    temp_prompt=$(mktemp)
+    temp_prompt=$(make_runner_temp)
     printf '%s' "$full_prompt" > "$temp_prompt"
 
     local temp_output
-    temp_output=$(mktemp)
+    temp_output=$(make_runner_temp)
 
     # Run Claude in the background with a timeout watchdog.
     # Using a temp file for input (not pipe) ensures clean EOF delivery.
