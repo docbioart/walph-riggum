@@ -170,7 +170,7 @@
   - Fix: Move `show_howto()`, `show_help()`, and `show_version()` out of `lib/utils.sh` and into `walph.sh` directly, or into a dedicated `lib/walph_help.sh` that only `walph.sh` sources.
   - Note: Fixed by creating `lib/walph_help.sh` with all three functions, updating `walph.sh` to source it, and removing the functions from `lib/utils.sh`. Walph-specific help content is now isolated and not available to goodbunny or jeeroy.
 
-- [ ] **[KISS]** `log_iteration_start()` banner has hardcoded padding that breaks alignment with long iteration numbers: In `lib/logging.sh` (lines 98-107), the banner uses fixed padding after the iteration info text. When `iteration` or `max_iterations` are multi-digit (e.g., "Iteration 15 / 100"), the right edge of the box misaligns. This is cosmetic but looks broken.
+- [x] **[KISS]** `log_iteration_start()` banner has hardcoded padding that breaks alignment with long iteration numbers: In `lib/logging.sh` (lines 98-107), the banner uses fixed padding after the iteration info text. When `iteration` or `max_iterations` are multi-digit (e.g., "Iteration 15 / 100"), the right edge of the box misaligns. This is cosmetic but looks broken.
   - File(s): `lib/logging.sh` (lines 98-107)
   - Fix: Either remove the right-side border character, or calculate padding dynamically based on the length of the iteration string using `printf` formatting.
 

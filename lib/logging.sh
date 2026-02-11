@@ -100,9 +100,15 @@ log_iteration_start() {
     local max_iterations="$2"
     local mode="$3"
 
+    # Calculate dynamic padding for proper alignment
+    local text="Iteration $iteration / $max_iterations ($mode mode)"
+    local box_width=60
+    local text_length=${#text}
+    local padding=$((box_width - text_length - 2))  # -2 for "║ " prefix
+
     echo ""
     echo "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
-    echo "${CYAN}║${RESET} ${BOLD}Iteration $iteration / $max_iterations${RESET} (${MAGENTA}$mode${RESET} mode)                        ${CYAN}║${RESET}"
+    printf "${CYAN}║${RESET} ${BOLD}Iteration %s / %s${RESET} (${MAGENTA}%s${RESET} mode)%*s${CYAN}║${RESET}\n" "$iteration" "$max_iterations" "$mode" "$padding" ""
     echo "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
 
