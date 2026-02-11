@@ -165,8 +165,9 @@ Then output this status block:
 RALPH_STATUS
 completion_level: [HIGH if audit is thorough and complete, MEDIUM if partial, LOW if just started]
 tasks_remaining: [number of findings generated]
+new_findings: [number of NEW findings added in THIS iteration, 0 if none]
 current_task: Audit iteration {{ITERATION}}
-EXIT_SIGNAL: [true if audit is complete and REVIEW_FINDINGS.md is written, false otherwise]
+EXIT_SIGNAL: [true ONLY if this iteration added ZERO new findings — meaning the review has stabilized. false if you added any new findings this iteration, because another pass may find more]
 RALPH_STATUS_END
 ```
 

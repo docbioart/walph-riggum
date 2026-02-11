@@ -52,6 +52,7 @@ GB_STATE_DIR="$GB_DIR/state"
 MODE=""
 MAX_ITERATIONS=""
 MODEL_OVERRIDE=""
+TIMEOUT_OVERRIDE=""
 DRY_RUN=false
 VERBOSE=false
 CATEGORIES_FILTER=""
@@ -121,6 +122,20 @@ parse_args() {
                     exit 1
                 fi
                 FILES_FILTER="$2"
+                shift 2
+                ;;
+            --timeout)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--timeout requires a numeric argument (seconds)"
+                    show_gb_help
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                    log_error "--timeout must be a positive integer (seconds)"
+                    show_gb_help
+                    exit 1
+                fi
+                TIMEOUT_OVERRIDE="$2"
                 shift 2
                 ;;
             --dry-run)
@@ -201,6 +216,11 @@ load_goodbunny_config() {
     MODEL_AUDIT="${GOODBUNNY_MODEL_AUDIT:-${MODEL_AUDIT:-$GB_DEFAULT_MODEL_AUDIT}}"
     MODEL_FIX="${GOODBUNNY_MODEL_FIX:-${MODEL_FIX:-$GB_DEFAULT_MODEL_FIX}}"
     ITERATION_TIMEOUT="${GOODBUNNY_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$GB_DEFAULT_ITERATION_TIMEOUT}}"
+
+    # CLI flag overrides (highest priority)
+    if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
+        ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
+    fi
 
     # Circuit breaker thresholds (tighter than walph defaults)
     # Priority: goodbunny-specific env var > config file > goodbunny defaults
@@ -417,6 +437,7 @@ OPTIONS:
                           (security,architecture,complexity,dry,kiss,
                            dependencies,error-handling,testing)
     --files PATH          Limit review to specific files or directories
+    --timeout SECONDS     Iteration timeout in seconds (default: 900)
     --dry-run             Show what would be run without executing
     -v, --verbose         Enable verbose output
     -h, --help            Show this help message
