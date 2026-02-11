@@ -420,6 +420,8 @@ run_qa_session() {
 
     # Write full context to a file Claude can read
     local context_file="$PROJECT_DIR/.jeeroy_context.md"
+    # Track temp file for cleanup on interrupt
+    JEEROY_TEMP_FILES="$JEEROY_TEMP_FILES $context_file"
     {
         printf '%s\n' "$prompt"
         printf '\n---\n\n# Target Directory\n\n'
