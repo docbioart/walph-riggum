@@ -24,6 +24,7 @@ export TOOL_NAME="Jeeroy Lenkins"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/converter.sh"
+source "$SCRIPT_DIR/lib/status_parser.sh"
 
 # ============================================================================
 # TEMP FILE CLEANUP
@@ -358,8 +359,30 @@ run_analysis() {
         --model "$MODEL" \
         < "$temp_prompt" \
         > "$temp_output" 2>&1; then
-        cat "$temp_output"
+        local output
+        output=$(cat "$temp_output")
+
+        # Check for rate limit
+        if check_rate_limit "$output"; then
+            log_error "Rate limit hit during analysis"
+            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
+            log_info "You can resume by running: jeeroy [same arguments]"
+            return 1
+        fi
+
+        echo "$output"
     else
+        local output
+        output=$(cat "$temp_output")
+
+        # Check if the failure was due to rate limiting
+        if check_rate_limit "$output"; then
+            log_error "Rate limit hit during analysis"
+            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
+            log_info "You can resume by running: jeeroy [same arguments]"
+            return 1
+        fi
+
         log_error "Claude analysis failed"
         cat "$temp_output" >&2
         return 1
@@ -453,8 +476,30 @@ run_direct_generation() {
         --model "$MODEL" \
         < "$temp_prompt" \
         > "$temp_output" 2>&1; then
-        cat "$temp_output"
+        local output
+        output=$(cat "$temp_output")
+
+        # Check for rate limit
+        if check_rate_limit "$output"; then
+            log_error "Rate limit hit during spec generation"
+            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
+            log_info "You can resume by running: jeeroy [same arguments]"
+            return 1
+        fi
+
+        echo "$output"
     else
+        local output
+        output=$(cat "$temp_output")
+
+        # Check if the failure was due to rate limiting
+        if check_rate_limit "$output"; then
+            log_error "Rate limit hit during spec generation"
+            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
+            log_info "You can resume by running: jeeroy [same arguments]"
+            return 1
+        fi
+
         log_error "Spec generation failed"
         cat "$temp_output" >&2
         return 1
