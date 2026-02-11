@@ -10,7 +10,7 @@
 
 ## Critical Findings
 
-- [ ] **[SECURITY]** `source "$project_config"` executes arbitrary code from user-controlled config files: Both `lib/config.sh:load_config()` (line 38) and `goodbunny.sh:load_goodbunny_config()` (line 142) use `source` to load config files from the project directory. Since `.walph/config` and `.goodbunny/config` are project files that could be committed to a repository, a malicious repository could include config files containing arbitrary shell commands that execute when `walph` or `goodbunny` is run.
+- [x] **[SECURITY]** `source "$project_config"` executes arbitrary code from user-controlled config files: Both `lib/config.sh:load_config()` (line 38) and `goodbunny.sh:load_goodbunny_config()` (line 142) use `source` to load config files from the project directory. Since `.walph/config` and `.goodbunny/config` are project files that could be committed to a repository, a malicious repository could include config files containing arbitrary shell commands that execute when `walph` or `goodbunny` is run.
   - File(s): `lib/config.sh` (line 38), `goodbunny.sh` (line 142)
   - Fix: Instead of `source`-ing the config files, parse them as key-value pairs using a safe reader. For example, read each line, validate it matches `^[A-Z_]+=.*$`, and use `declare` on validated lines only. Alternatively, use `grep` + parameter expansion to extract known config keys.
 

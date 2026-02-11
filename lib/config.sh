@@ -32,10 +32,30 @@ DEFAULT_ITERATION_TIMEOUT=900  # 15 minutes
 load_config() {
     local project_config="${PROJECT_DIR:-.}/.walph/config"
 
-    # Load from config file if it exists
+    # Load from config file if it exists (safely parse as key=value)
     if [[ -f "$project_config" ]]; then
-        # shellcheck source=/dev/null
-        source "$project_config"
+        # Read config file line by line, validate format, and set variables
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+            # Validate line matches KEY=VALUE pattern (only uppercase letters, numbers, underscores in key)
+            if [[ "$line" =~ ^[A-Z_][A-Z0-9_]*=(.*)$ ]]; then
+                # Extract key and value
+                local key="${line%%=*}"
+                local value="${line#*=}"
+
+                # Only allow known configuration variables
+                case "$key" in
+                    MAX_ITERATIONS|MODEL_PLAN|MODEL_BUILD|LOG_DIR|STATE_DIR|ITERATION_TIMEOUT|\
+                    CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
+                    CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|RATE_LIMIT_RETRY_DELAY)
+                        # Safe assignment using eval with proper quoting
+                        eval "$key=\"\$value\""
+                        ;;
+                esac
+            fi
+        done < "$project_config"
     fi
 
     # Apply environment variable overrides
