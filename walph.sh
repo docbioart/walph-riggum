@@ -592,37 +592,7 @@ EOF
 
     # Create .gitignore
     log_info "Creating .gitignore..."
-    cat > "$target_dir/.gitignore" << 'EOF'
-# Dependencies
-node_modules/
-venv/
-__pycache__/
-*.pyc
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# Environment
-.env
-.env.local
-
-# Logs
-*.log
-
-# Ralph (keep config and prompts, ignore state and logs)
-.walph/logs/
-.walph/state/
-
-# OS
-.DS_Store
-EOF
+    cp "$SCRIPT_DIR/templates/gitignore.template" "$target_dir/.gitignore"
 
     # Create Docker files if requested
     if [[ "$INIT_DOCKER" == "true" ]]; then

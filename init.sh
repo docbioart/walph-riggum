@@ -252,47 +252,7 @@ create_gitignore() {
     local project_dir="$1"
 
     log_info "Creating .gitignore..."
-
-    cat > "$project_dir/.gitignore" << 'EOF'
-# Dependencies
-node_modules/
-venv/
-__pycache__/
-*.pyc
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-*.local
-
-# Logs
-logs/
-*.log
-
-# Walph state (keep config and prompts)
-.walph/logs/
-.walph/state/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-coverage/
-.pytest_cache/
-.coverage
-EOF
+    cp "$SCRIPT_DIR/templates/gitignore.template" "$project_dir/.gitignore"
 }
 
 init_git() {
