@@ -85,10 +85,25 @@ parse_args() {
                 exit 0
                 ;;
             --max-iterations)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--max-iterations requires a numeric argument"
+                    show_help
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                    log_error "--max-iterations must be a positive integer"
+                    show_help
+                    exit 1
+                fi
                 MAX_ITERATIONS="$2"
                 shift 2
                 ;;
             --model)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--model requires a model name argument"
+                    show_help
+                    exit 1
+                fi
                 MODEL_OVERRIDE="$2"
                 shift 2
                 ;;

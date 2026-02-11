@@ -83,18 +83,43 @@ parse_args() {
                 exit 0
                 ;;
             --max-iterations)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--max-iterations requires a numeric argument"
+                    show_gb_help
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                    log_error "--max-iterations must be a positive integer"
+                    show_gb_help
+                    exit 1
+                fi
                 MAX_ITERATIONS="$2"
                 shift 2
                 ;;
             --model)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--model requires a model name argument"
+                    show_gb_help
+                    exit 1
+                fi
                 MODEL_OVERRIDE="$2"
                 shift 2
                 ;;
             --categories)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--categories requires an argument"
+                    show_gb_help
+                    exit 1
+                fi
                 CATEGORIES_FILTER="$2"
                 shift 2
                 ;;
             --files)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--files requires an argument"
+                    show_gb_help
+                    exit 1
+                fi
                 FILES_FILTER="$2"
                 shift 2
                 ;;
