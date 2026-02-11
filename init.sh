@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
+source "$SCRIPT_DIR/lib/docker.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
@@ -244,92 +245,8 @@ EOF
 EOF
 }
 
-create_docker_setup() {
-    local project_dir="$1"
-    local stack="$2"
-
-    log_info "Creating Docker configuration..."
-
-    mkdir -p "$project_dir/docker"
-
-    # docker-compose.yml
-    cat > "$project_dir/docker-compose.yml" << 'EOF'
-version: '3.8'
-
-services:
-  app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/app
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=app
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
-EOF
-
-    # Dockerfile based on stack
-    case "$stack" in
-        node|both)
-            cat > "$project_dir/docker/Dockerfile" << 'EOF'
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
-
-# Copy source
-COPY . .
-
-# Build
-RUN npm run build || true
-
-EXPOSE 3000
-
-CMD ["npm", "start"]
-EOF
-            ;;
-        python)
-            cat > "$project_dir/docker/Dockerfile" << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements*.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source
-COPY . .
-
-EXPOSE 8000
-
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-EOF
-            ;;
-    esac
-}
+# Note: This function is now defined in lib/docker.sh
+# init.sh calls it with postgres always enabled (the 4th parameter defaults to "true")
 
 create_gitignore() {
     local project_dir="$1"
@@ -432,7 +349,7 @@ main() {
 
     # Create Docker setup if requested
     if [[ "$WITH_DOCKER" == "true" ]]; then
-        create_docker_setup "$project_dir" "$STACK"
+        create_docker_setup "$project_dir" "$STACK" "$PROJECT_NAME" "true"
     fi
 
     # Create .gitignore

@@ -150,9 +150,10 @@
 
 ## Low Priority
 
-- [ ] **[DRY]** Docker file creation logic is duplicated between `walph.sh` and `init.sh`: Both `walph.sh:create_docker_files()` (lines 936-1033) and `init.sh:create_docker_setup()` (lines 309-393) create Docker configurations with slightly different formats and options.
+- [x] **[DRY]** Docker file creation logic is duplicated between `walph.sh` and `init.sh`: Both `walph.sh:create_docker_files()` (lines 936-1033) and `init.sh:create_docker_setup()` (lines 309-393) create Docker configurations with slightly different formats and options.
   - File(s): `walph.sh` (lines 936-1033), `init.sh` (lines 309-393)
   - Fix: Consolidate into a shared function in a library file (e.g., `lib/docker.sh`) or use the template files that already exist in `templates/docker/`.
+  - Note: Fixed by creating `lib/docker.sh` with shared `create_docker_setup()` function. Both `walph.sh` and `init.sh` now use the shared implementation, with `walph.sh` using a thin wrapper to maintain its existing interface.
 
 - [ ] **[DRY]** `.gitignore` creation logic is duplicated between `walph.sh` and `init.sh`: Both `walph.sh:run_init()` (lines 1263-1294) and `init.sh:create_gitignore()` (lines 396-441) create `.gitignore` files with slightly different contents (init.sh's version is more comprehensive, including coverage/ and .pytest_cache/).
   - File(s): `walph.sh` (lines 1263-1294), `init.sh` (lines 396-441)

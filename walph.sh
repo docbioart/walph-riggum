@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/runner.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
 source "$SCRIPT_DIR/lib/setup_command.sh"
+source "$SCRIPT_DIR/lib/docker.sh"
 
 # ============================================================================
 # ARGUMENT PARSING
@@ -355,103 +356,10 @@ apply_template_defaults() {
 
 
 # Generate Docker files based on template and stack
+# Wrapper for the shared create_docker_setup function
 create_docker_files() {
     local target_dir="$1"
-    mkdir -p "$target_dir/docker"
-
-    local app_port="3000"
-    local db_section=""
-
-    if [[ "$INIT_STACK" == "python" ]]; then
-        app_port="8000"
-    fi
-
-    # Add Postgres if requested
-    if [[ "$INIT_POSTGRES" == "true" ]]; then
-        db_section="
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=$INIT_PROJECT_NAME
-    ports:
-      - \"5432:5432\"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:"
-    fi
-
-    # Docker compose
-    cat > "$target_dir/docker-compose.yml" << EOF
-version: '3.8'
-
-services:
-  app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    ports:
-      - "$app_port:$app_port"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development${INIT_POSTGRES:+
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/$INIT_PROJECT_NAME}
-${INIT_POSTGRES:+    depends_on:
-      db:
-        condition: service_healthy}
-    restart: unless-stopped
-$db_section
-EOF
-
-    # Dockerfile based on stack
-    case "$INIT_STACK" in
-        python)
-            cat > "$target_dir/docker/Dockerfile" << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements*.txt ./
-RUN pip install --no-cache-dir -r requirements.txt 2>/dev/null || echo "No requirements.txt"
-
-# Copy source
-COPY . .
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-EOF
-            ;;
-        *)
-            cat > "$target_dir/docker/Dockerfile" << 'EOF'
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Install dependencies
-COPY package*.json ./
-RUN npm ci 2>/dev/null || npm init -y
-
-# Copy source
-COPY . .
-
-EXPOSE 3000
-
-CMD ["npm", "run", "dev"]
-EOF
-            ;;
-    esac
+    create_docker_setup "$target_dir" "$INIT_STACK" "$INIT_PROJECT_NAME" "$INIT_POSTGRES"
 }
 
 # ============================================================================
