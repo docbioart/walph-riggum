@@ -15,6 +15,11 @@ parse_setup_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --stack)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--stack requires a type argument"
+                    show_setup_help
+                    exit 1
+                fi
                 SETUP_STACK="$2"
                 shift 2
                 ;;

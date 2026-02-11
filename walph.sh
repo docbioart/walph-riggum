@@ -155,10 +155,20 @@ parse_init_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --template|-t)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--template requires a type argument"
+                    show_init_help
+                    exit 1
+                fi
                 INIT_TEMPLATE="$2"
                 shift 2
                 ;;
             --stack)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--stack requires a type argument"
+                    show_init_help
+                    exit 1
+                fi
                 INIT_STACK="$2"
                 shift 2
                 ;;
