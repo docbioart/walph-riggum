@@ -435,8 +435,8 @@ EOF
 show_gb_howto() {
     cat << 'EOF'
 ╔═══════════════════════════════════════════════════════════════════════════════╗
-║                           GOOD BUNNY                                         ║
-║                  Autonomous Code Quality Reviewer                            ║
+║                              GOOD BUNNY                                       ║
+║                     Autonomous Code Quality Reviewer                          ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 Good Bunny audits any project for code quality issues and fixes them

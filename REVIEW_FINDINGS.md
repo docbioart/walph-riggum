@@ -251,9 +251,10 @@
   - File(s): `QUICKSTART.md` (line 307)
   - Fix: Change `./init.sh <name> --stack <node|python|both> [--docker] [--no-git]` to `walph init <name> --template <type> --stack <lang> [--docker] [--postgres]` to match `walph.sh`'s current options.
 
-- [ ] **[KISS]** `show_gb_howto()` banner box alignment is broken: In `goodbunny.sh` (lines 560-563), the banner box characters are misaligned — the title text `GOOD BUNNY` and subtitle `Autonomous Code Quality Reviewer` don't fill the box width symmetrically, leaving irregular trailing spaces before the right `║` character. This is the same class of cosmetic issue as the `log_iteration_start()` finding but in a different function.
+- [x] **[KISS]** `show_gb_howto()` banner box alignment is broken: In `goodbunny.sh` (lines 560-563), the banner box characters are misaligned — the title text `GOOD BUNNY` and subtitle `Autonomous Code Quality Reviewer` don't fill the box width symmetrically, leaving irregular trailing spaces before the right `║` character. This is the same class of cosmetic issue as the `log_iteration_start()` finding but in a different function.
   - File(s): `goodbunny.sh` (lines 560-563)
   - Fix: Calculate the padding dynamically or remove the right-side border character, similar to the fix for `log_iteration_start()`.
+  - Note: Fixed by adjusting the padding in lines 438-439 to center the text symmetrically within the box borders.
 
 ## Out of Scope
 
