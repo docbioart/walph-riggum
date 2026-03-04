@@ -31,6 +31,7 @@ MODE="build"
 MAX_ITERATIONS=""
 MODEL_OVERRIDE=""
 MONITOR_MODE=false
+FAST_MODE=false
 DRY_RUN=false
 VERBOSE=false
 
@@ -111,6 +112,10 @@ parse_args() {
                 ;;
             --monitor)
                 MONITOR_MODE=true
+                shift
+                ;;
+            --fast)
+                FAST_MODE=true
                 shift
                 ;;
             --dry-run)

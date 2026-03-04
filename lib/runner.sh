@@ -117,12 +117,19 @@ run_shared_iteration() {
     local temp_output
     temp_output=$(make_runner_temp)
 
+    # Build fast mode flag if enabled
+    local fast_settings=""
+    if [[ "${FAST_MODE:-false}" == "true" ]]; then
+        fast_settings='--settings {"fastMode":true}'
+    fi
+
     # Run Claude in the background with a timeout watchdog.
     # Using a temp file for input (not pipe) ensures clean EOF delivery.
     # The background PID lets us kill it if it exceeds the timeout.
     claude -p \
         --dangerously-skip-permissions \
         --model "$model" \
+        ${fast_settings} \
         < "$temp_prompt" \
         > "$temp_output" 2>&1 &
     local claude_pid=$!

@@ -66,6 +66,7 @@ STACK=""
 LFG_MODE=false
 SKIP_QA=false
 MODEL="opus"
+FAST_MODE=false
 DRY_RUN=false
 VERBOSE=false
 
@@ -94,6 +95,7 @@ OPTIONS:
                           (setup -> plan -> build, fully autonomous)
     --skip-qa             Skip interactive Q&A, generate best-effort specs
     --model <name>        Claude model to use (default: opus)
+    --fast                Enable Claude fast mode (2.5x faster, higher cost)
     --dry-run             Show what would happen without executing
     -v, --verbose         Verbose output
     -h, --help            Show this help
@@ -184,6 +186,10 @@ parse_jeeroy_args() {
                 fi
                 MODEL="$2"
                 shift 2
+                ;;
+            --fast)
+                FAST_MODE=true
+                shift
                 ;;
             --dry-run)
                 DRY_RUN=true
@@ -343,8 +349,14 @@ run_analysis() {
     local temp_output
     temp_output=$(make_temp)
 
+    local fast_settings=""
+    if [[ "$FAST_MODE" == "true" ]]; then
+        fast_settings='--settings {"fastMode":true}'
+    fi
+
     if claude -p \
         --model "$MODEL" \
+        ${fast_settings} \
         < "$temp_prompt" \
         > "$temp_output" 2>&1; then
         local output
@@ -420,11 +432,17 @@ run_qa_session() {
         printf '%s\n' "$converted_content"
     } > "$context_file"
 
+    local fast_settings=""
+    if [[ "$FAST_MODE" == "true" ]]; then
+        fast_settings='--settings {"fastMode":true}'
+    fi
+
     # Run Claude interactively (NOT in print mode)
     # The initial prompt tells Claude to read the context and begin
     claude \
         --model "$MODEL" \
         --dangerously-skip-permissions \
+        ${fast_settings} \
         "Read the file at $context_file which contains project documentation and instructions for a Jeeroy Lenkins Q&A session. Follow those instructions: summarize what you found, ask clarifying questions ONE AT A TIME (waiting for my response each time), then write the spec files directly to $specs_dir/. Start now."
 
     # Clean up context file
@@ -462,8 +480,14 @@ run_direct_generation() {
     local temp_output
     temp_output=$(make_temp)
 
+    local fast_settings=""
+    if [[ "$FAST_MODE" == "true" ]]; then
+        fast_settings='--settings {"fastMode":true}'
+    fi
+
     if claude -p \
         --model "$MODEL" \
+        ${fast_settings} \
         < "$temp_prompt" \
         > "$temp_output" 2>&1; then
         local output

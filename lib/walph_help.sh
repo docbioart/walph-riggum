@@ -60,6 +60,7 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
   walph build [options]         Build from implementation plan
     --max-iterations N          Limit iterations (default: 50)
     --model <name>              Override model (default: sonnet)
+    --fast                      Enable Claude fast mode (2.5x faster, higher cost)
     --monitor                   Enable tmux monitoring view
 
   walph status                  Show current progress
@@ -162,6 +163,7 @@ COMMANDS:
 OPTIONS:
     --max-iterations N    Maximum iterations (default: 50)
     --model MODEL         Override model for this run
+    --fast                Enable Claude fast mode (2.5x faster, higher cost)
     --monitor             Enable tmux monitoring view
     --dry-run             Show what would be run without executing
     -v, --verbose         Enable verbose output
