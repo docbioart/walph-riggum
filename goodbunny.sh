@@ -35,6 +35,7 @@ GB_VERSION="1.0.0"
 GB_DEFAULT_MAX_ITERATIONS=30
 GB_DEFAULT_MODEL_AUDIT="opus"
 GB_DEFAULT_MODEL_FIX="sonnet"
+GB_DEFAULT_MODEL_ANALYZE="opus"
 GB_DEFAULT_ITERATION_TIMEOUT=900
 GB_DEFAULT_CB_NO_CHANGE=3
 GB_DEFAULT_CB_SAME_ERROR=3
@@ -73,6 +74,10 @@ parse_args() {
                 ;;
             fix)
                 MODE="fix"
+                shift
+                ;;
+            analyze)
+                MODE="analyze"
                 shift
                 ;;
             status)
@@ -164,7 +169,7 @@ parse_args() {
     done
 
     if [[ -z "$MODE" ]]; then
-        log_error "No command specified. Use 'audit' or 'fix'."
+        log_error "No command specified. Use 'audit', 'fix', or 'analyze'."
         show_gb_help
         exit 1
     fi
@@ -198,10 +203,11 @@ load_goodbunny_config() {
 
                 # Only allow known configuration variables
                 case "$key" in
-                    MAX_ITERATIONS|MODEL_AUDIT|MODEL_FIX|ITERATION_TIMEOUT|\
+                    MAX_ITERATIONS|MODEL_AUDIT|MODEL_FIX|MODEL_ANALYZE|ITERATION_TIMEOUT|\
                     CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
                     CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|GOODBUNNY_MAX_ITERATIONS|\
-                    GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_ITERATION_TIMEOUT|\
+                    GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_MODEL_ANALYZE|\
+                    GOODBUNNY_ITERATION_TIMEOUT|\
                     GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
                         # Safe assignment using eval with proper quoting
                         eval "$key=\"\$value\""
@@ -215,6 +221,7 @@ load_goodbunny_config() {
     MAX_ITERATIONS="${GOODBUNNY_MAX_ITERATIONS:-${MAX_ITERATIONS:-$GB_DEFAULT_MAX_ITERATIONS}}"
     MODEL_AUDIT="${GOODBUNNY_MODEL_AUDIT:-${MODEL_AUDIT:-$GB_DEFAULT_MODEL_AUDIT}}"
     MODEL_FIX="${GOODBUNNY_MODEL_FIX:-${MODEL_FIX:-$GB_DEFAULT_MODEL_FIX}}"
+    MODEL_ANALYZE="${GOODBUNNY_MODEL_ANALYZE:-${MODEL_ANALYZE:-$GB_DEFAULT_MODEL_ANALYZE}}"
     ITERATION_TIMEOUT="${GOODBUNNY_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$GB_DEFAULT_ITERATION_TIMEOUT}}"
 
     # CLI flag overrides (highest priority)
@@ -241,6 +248,9 @@ get_gb_model() {
             ;;
         fix)
             echo "$MODEL_FIX"
+            ;;
+        analyze)
+            echo "$MODEL_ANALYZE"
             ;;
         *)
             echo "$MODEL_FIX"
@@ -270,6 +280,7 @@ ensure_goodbunny_dirs() {
 # Models (use aliases: opus, sonnet, or full model names)
 # MODEL_AUDIT="opus"
 # MODEL_FIX="sonnet"
+# MODEL_ANALYZE="opus"
 
 # Iteration timeout in seconds (kills Claude if it hangs)
 # ITERATION_TIMEOUT=900
@@ -314,6 +325,16 @@ show_gb_status() {
         if [[ -f "$PROJECT_DIR/$GB_STATE_DIR/circuit_breaker.json" ]]; then
             init_circuit_breaker "$PROJECT_DIR/$GB_STATE_DIR"
             echo "Circuit breaker: $(get_circuit_breaker_status)"
+        fi
+
+        # Check for codebase report
+        if [[ -f "$PROJECT_DIR/GOODBUNNY_REPORT.md" ]]; then
+            echo "Codebase report: Found"
+            local sections_complete
+            sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || echo "0")
+            echo "Report sections: $sections_complete of 12"
+        else
+            echo "Codebase report: Not found (run 'goodbunny analyze')"
         fi
 
         # Check for review findings
@@ -381,6 +402,15 @@ _gb_template_callback() {
     files_section=$(build_files_section)
     full_prompt="${full_prompt//\{\{FILES\}\}/$files_section}"
 
+    # Substitute audit findings reference (for analyze mode)
+    local audit_ref
+    if [[ -f "$PROJECT_DIR/REVIEW_FINDINGS.md" ]]; then
+        audit_ref="- A prior audit exists in \`REVIEW_FINDINGS.md\`. Read it and incorporate relevant findings into this section."
+    else
+        audit_ref="- No prior audit found. Rely on TODO/FIXME scanning and your own analysis."
+    fi
+    full_prompt="${full_prompt//\{\{AUDIT_FINDINGS_REF\}\}/$audit_ref}"
+
     echo "$full_prompt"
 }
 
@@ -427,6 +457,7 @@ USAGE:
 COMMANDS:
     audit             Deep code review (generates REVIEW_FINDINGS.md)
     fix               Fix findings one at a time (from REVIEW_FINDINGS.md)
+    analyze           Document codebase (generates GOODBUNNY_REPORT.md)
     status            Show current review progress
     reset             Reset circuit breaker and state
 
@@ -449,6 +480,8 @@ EXAMPLES:
     goodbunny.sh audit --files src/                   # Audit specific directory
     goodbunny.sh fix                                  # Fix findings one by one
     goodbunny.sh fix --max-iterations 5               # Fix up to 5 findings
+    goodbunny.sh analyze                              # Document entire codebase
+    goodbunny.sh analyze --files lib/                 # Document specific directory
     goodbunny.sh status                               # Check progress
 EOF
 }
@@ -471,6 +504,7 @@ autonomously. No setup required — just point it at your project.
 
   goodbunny audit                    # Deep code review → REVIEW_FINDINGS.md
   goodbunny fix                      # Fix findings one by one
+  goodbunny analyze                  # Document codebase → GOODBUNNY_REPORT.md
 
   That's it. No setup, no config files, no ceremony.
 
@@ -490,7 +524,13 @@ autonomously. No setup required — just point it at your project.
                          - Commits changes
                          - Repeats until all findings are fixed
 
-  3. CIRCUIT BREAKER     Auto-stops if stuck:
+  3. ANALYZE (Opus)      Good Bunny documents your codebase:
+                         - Writes 1-2 sections per iteration
+                         - 12-section comprehensive report
+                         - Incorporates audit findings if available
+                         - Generates GOODBUNNY_REPORT.md
+
+  4. CIRCUIT BREAKER     Auto-stops if stuck:
                          - No file changes for 3 iterations
                          - Same error 3 times
                          - No commits for 4 iterations
@@ -520,6 +560,10 @@ autonomously. No setup required — just point it at your project.
   goodbunny fix [options]            Fix findings one by one
     --max-iterations 10              Limit number of fixes
     --model sonnet                   Override model
+
+  goodbunny analyze [options]        Document the codebase
+    --files src/                     Scope to specific paths
+    --model opus                     Override model
 
   goodbunny status                   Show review progress
   goodbunny reset                    Reset circuit breaker (if stuck)

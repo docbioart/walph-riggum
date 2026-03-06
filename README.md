@@ -4,7 +4,7 @@ An autonomous coding loop that runs Claude from the *outside* to build software 
 
 Comes with **[Jeeroy Lenkins](#jeeroy-lenkins---document-to-spec-converter)**, a companion tool that turns any pile of docs (Word, PDF, PowerPoint, markdown, etc.) into Walph-ready specs and optionally kicks off the entire pipeline with a single `--lfg` flag. Docs in, working code out.
 
-And **[Good Bunny](#good-bunny---autonomous-code-quality-reviewer)**, a code quality reviewer that audits any project for issues across 8 categories and fixes them autonomously. No setup required.
+And **[Good Bunny](#good-bunny---autonomous-code-quality-reviewer)**, a code quality reviewer that audits any project for issues across 8 categories, fixes them autonomously, and can generate a comprehensive codebase documentation report. No setup required.
 
 > "Me fail English? That's unpossible!" - Walph Riggum
 
@@ -32,7 +32,7 @@ This is how humans work on large projects: do one thing, save your work, take a 
 | **Interactive Claude Code**  | Accumulates          | In conversation | Manual                      | Small tasks, exploration    |
 | **Claude Code plugins**      | Accumulates          | In conversation | Manual                      | Extending functionality     |
 | **Walph Riggum**             | Fresh each iteration | Files + Git     | One-shot via Jeeroy `--lfg` | Large projects, autonomy    |
-| **Good Bunny**               | Fresh each iteration | REVIEW_FINDINGS | N/A                         | Code quality, any project   |
+| **Good Bunny**               | Fresh each iteration | REVIEW_FINDINGS | N/A                         | Code quality, codebase docs |
 
 Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
 
@@ -343,6 +343,7 @@ When designing new projects, Jeeroy defaults to:
 
 1. **Audit** (Opus) - Good Bunny reads your project and reviews it against 8 code quality categories, generating `REVIEW_FINDINGS.md` with prioritized, actionable findings
 2. **Fix** (Sonnet) - Good Bunny picks ONE finding per iteration, fixes it, runs tests, marks it done, and commits — repeating until all findings are addressed
+3. **Analyze** (Opus) - Good Bunny documents the entire codebase, generating `GOODBUNNY_REPORT.md` — a 12-section guide covering architecture, setup, patterns, testing, and more. If a prior audit exists, findings are incorporated automatically
 
 ### Works on Any Project
 
@@ -364,6 +365,10 @@ goodbunny audit --files src/api/
 
 # Limit fix iterations
 goodbunny fix --max-iterations 10
+
+# Generate codebase documentation
+goodbunny analyze
+goodbunny analyze --files lib/    # Scope to specific directory
 ```
 
 ### Review Categories
@@ -387,6 +392,7 @@ Good Bunny auto-creates `.goodbunny/config` on first run. Override via environme
 export GOODBUNNY_MAX_ITERATIONS=50
 export GOODBUNNY_MODEL_AUDIT="opus"
 export GOODBUNNY_MODEL_FIX="sonnet"
+export GOODBUNNY_MODEL_ANALYZE="opus"
 export GOODBUNNY_ITERATION_TIMEOUT=1200
 ```
 
