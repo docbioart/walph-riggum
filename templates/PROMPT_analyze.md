@@ -51,8 +51,8 @@ Build the report with these 12 sections, in order:
 - File naming conventions
 
 ### Section 4: Architecture
-- Component diagram (describe in text/ASCII)
-- Data flow through the system
+- **Architecture diagram** — Create a Mermaid diagram showing the major components, their relationships, and data flow. Use `graph TD` or `flowchart TD` for system-level views, `sequenceDiagram` for request flows, or `C4Context`/`C4Container` for larger systems. The diagram MUST be valid Mermaid syntax that renders without errors (test mentally: no unquoted special characters in labels, proper arrow syntax, matching subgraph/end pairs).
+- Data flow through the system (narrative explanation complementing the diagram)
 - Module dependencies and boundaries
 - Shared libraries and utilities
 
@@ -155,6 +155,17 @@ Each section MUST NOT:
 - Make assumptions about code you haven't read
 - Include obvious or generic information that applies to any project
 - Duplicate information across sections
+
+### Mermaid Diagram Requirements
+
+The Architecture section MUST include a Mermaid diagram inside a ` ```mermaid ` fenced code block. Follow these rules to ensure it renders correctly:
+
+1. **Wrap labels with special characters in quotes**: Any node label containing parentheses, slashes, dots, hyphens, or other special characters must be quoted — e.g., `A["walph.sh (entry)"]` not `A[walph.sh (entry)]`
+2. **Use valid arrow syntax**: `-->` for solid arrows, `-.->` for dotted, `==>` for thick. Always use `-->|label|` for edge labels, not freeform text on arrows
+3. **Match all subgraph/end pairs**: Every `subgraph` must have a corresponding `end`
+4. **No duplicate node IDs**: Each node ID must be unique across the entire diagram
+5. **Keep it readable**: Limit to 15-25 nodes max. Group related components in subgraphs. Use meaningful IDs (e.g., `auth_svc` not `A1`)
+6. **Validate before writing**: Walk through every line of your diagram and confirm the syntax is correct before adding it to the report
 
 ## Guards
 
