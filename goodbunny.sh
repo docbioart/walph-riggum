@@ -333,6 +333,9 @@ show_gb_status() {
             local sections_complete
             sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || echo "0")
             echo "Report sections: $sections_complete of 12"
+            if [[ -f "$PROJECT_DIR/goodbunny.mermaid" ]]; then
+                echo "Architecture diagram: Found (goodbunny.mermaid)"
+            fi
         else
             echo "Codebase report: Not found (run 'goodbunny analyze')"
         fi

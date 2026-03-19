@@ -51,7 +51,7 @@ Build the report with these 12 sections, in order:
 - File naming conventions
 
 ### Section 4: Architecture
-- **Architecture diagram** — Create a Mermaid diagram showing the major components, their relationships, and data flow. Use `graph TD` or `flowchart TD` for system-level views, `sequenceDiagram` for request flows, or `C4Context`/`C4Container` for larger systems. The diagram MUST be valid Mermaid syntax that renders without errors (test mentally: no unquoted special characters in labels, proper arrow syntax, matching subgraph/end pairs).
+- **Architecture diagram** — Create a Mermaid diagram and save it to **two places**: (1) embedded in a ` ```mermaid ` block in GOODBUNNY_REPORT.md, and (2) as a standalone `goodbunny.mermaid` file at the project root. Both must contain identical diagram content. See the "Mermaid Diagram Requirements" section below for mandatory syntax rules.
 - Data flow through the system (narrative explanation complementing the diagram)
 - Module dependencies and boundaries
 - Shared libraries and utilities
@@ -158,18 +158,87 @@ Each section MUST NOT:
 
 ### Mermaid Diagram Requirements
 
-The Architecture section MUST include a Mermaid diagram inside a ` ```mermaid ` fenced code block. Follow these rules to ensure it renders correctly:
+The Architecture section MUST include a Mermaid diagram inside a ` ```mermaid ` block in the report AND as a standalone `goodbunny.mermaid` file. The diagram MUST render without errors. Most Mermaid failures come from a few common mistakes — follow these rules strictly:
 
-1. **Wrap labels with special characters in quotes**: Any node label containing parentheses, slashes, dots, hyphens, or other special characters must be quoted — e.g., `A["walph.sh (entry)"]` not `A[walph.sh (entry)]`
-2. **Use valid arrow syntax**: `-->` for solid arrows, `-.->` for dotted, `==>` for thick. Always use `-->|label|` for edge labels, not freeform text on arrows
-3. **Match all subgraph/end pairs**: Every `subgraph` must have a corresponding `end`
-4. **No duplicate node IDs**: Each node ID must be unique across the entire diagram
-5. **Keep it readable**: Limit to 15-25 nodes max. Group related components in subgraphs. Use meaningful IDs (e.g., `auth_svc` not `A1`)
-6. **Validate before writing**: Walk through every line of your diagram and confirm the syntax is correct before adding it to the report
+#### Syntax Rules (MANDATORY)
+
+1. **NEVER use pipe characters `|` inside node labels.** Pipes are Mermaid's edge-label delimiter. Use commas, semicolons, or line breaks instead.
+   - BAD: `A["Auth | Users | Projects"]` — parser sees `|` as edge label boundary
+   - GOOD: `A["Auth, Users, Projects"]`
+
+2. **NEVER use `<br/>` or HTML tags in labels.** Use `\n` for line breaks inside quoted labels, or split into separate nodes.
+   - BAD: `A["Frontend<br/>React SPA"]`
+   - GOOD: `A["Frontend\nReact SPA"]`
+
+3. **ALWAYS quote labels that contain ANY special characters.** This includes parentheses, slashes, dots, commas, colons, spaces, and plus signs. Use double quotes inside square brackets.
+   - BAD: `api[API Router /api/v2]`
+   - GOOD: `api["API Router - /api/v2"]`
+
+4. **NEVER draw arrows to or from subgraph IDs.** Arrows must connect node IDs only. If you need to connect to a group, create a gateway node inside the subgraph.
+   - BAD: `Services --> Database` (where both are subgraph names)
+   - GOOD: `svc_gateway --> db_engine` (where both are nodes)
+
+5. **Use valid arrow syntax only.** `-->` solid, `-.->` dotted, `==>` thick. Edge labels use `-->|"label text"|` format (quoted if the label contains special characters).
+   - BAD: `A -->|Priority: 1 Bedrock, 2 Azure| B`
+   - GOOD: `A -->|"Priority: Bedrock then Azure"| B`
+
+6. **Match all subgraph/end pairs.** Every `subgraph` must have exactly one `end`. Indent contents for readability.
+
+7. **No duplicate node IDs.** Each node ID must appear in exactly one node definition.
+
+#### Design Rules
+
+8. **Keep it high-level: 10-20 nodes maximum.** Show major components and their relationships, not every class or file. If the system has many parts, group them into subgraphs with a single representative node each.
+
+9. **Use `graph TD` (top-down) for system architecture.** This is the most readable layout for showing layers (frontend -> backend -> database).
+
+10. **Use meaningful node IDs.** Use `auth_svc`, `db_layer`, `api_router` — not `A1`, `B2`, `C3`.
+
+11. **Limit subgraph nesting to 2 levels max.** Deeply nested subgraphs cause rendering issues across Mermaid versions.
+
+#### Validation Checklist (do this BEFORE writing)
+
+Before adding the diagram to the report, mentally verify:
+- [ ] No `|` characters inside any node label `["..."]`
+- [ ] No `<br/>` or HTML tags anywhere
+- [ ] Every label with special characters is in `["double quotes"]`
+- [ ] Every arrow connects node IDs, never subgraph IDs
+- [ ] Every `subgraph` has a matching `end`
+- [ ] Total nodes is between 10-20
+- [ ] No duplicate node IDs
+
+#### Example of correct syntax
+
+```
+graph TD
+    subgraph frontend["Frontend"]
+        ui["React SPA"]
+        api_client["API Client"]
+        ui --> api_client
+    end
+
+    api_client -->|"HTTP/JSON"| router
+
+    subgraph backend["Backend"]
+        router["API Router"]
+        auth["Auth Service"]
+        workers["Background Jobs"]
+        router --> auth
+        router --> workers
+    end
+
+    subgraph data["Data Layer"]
+        db["PostgreSQL"]
+        cache["Redis"]
+    end
+
+    router --> db
+    workers --> cache
+```
 
 ## Guards
 
-1. **DOCUMENT ONLY** — Do not modify any project files. Only create/update GOODBUNNY_REPORT.md.
+1. **DOCUMENT ONLY** — Do not modify any project files. Only create/update GOODBUNNY_REPORT.md and goodbunny.mermaid.
 2. **BE ACCURATE** — Read the actual code before writing about it. Don't guess.
 3. **INCREMENTAL** — Write 1-2 sections per iteration. Don't try to do everything at once.
 4. **SKIP EMPTY SECTIONS** — If a section doesn't apply (e.g., no database), say so briefly and move on.
@@ -180,7 +249,7 @@ The Architecture section MUST include a Mermaid diagram inside a ` ```mermaid ` 
 After updating GOODBUNNY_REPORT.md, commit it:
 
 ```bash
-git add GOODBUNNY_REPORT.md
+git add GOODBUNNY_REPORT.md goodbunny.mermaid
 git commit -m "analyze: document [sections written this iteration]"
 ```
 
