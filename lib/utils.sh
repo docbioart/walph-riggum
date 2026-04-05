@@ -60,6 +60,13 @@ check_chrome_mcp() {
         fi
     fi
 
+    # Check Claude Code MCP config
+    if [[ -f "${HOME}/.claude/mcp.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/.claude/mcp.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+
     if [[ "$chrome_mcp_found" == "true" ]]; then
         return 0
     else
