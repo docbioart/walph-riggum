@@ -62,17 +62,27 @@ If the project has any user interface (web, mobile, desktop):
 - Note that compile/build success does NOT mean the UI works - actual browser testing is required
 - Plan for test scenarios that verify the UI actually renders and functions correctly
 
-### Step 3d: Environment Configuration
+### Step 3d: Frontend/Backend API Contract
+
+If the project has both a frontend and backend (fullstack, API + client, etc.):
+- **Define the API contract explicitly** — Every endpoint must specify: HTTP method, path, request body/params, response shape (with field names and types), and error responses
+- **Shared types/interfaces** — Identify data structures used by both frontend and backend. Recommend a shared types/schema file or OpenAPI spec so both sides reference the same source of truth
+- **Variable naming consistency** — Ensure field names, enum values, and status codes are identical on both sides. Flag any ambiguity (e.g., docs say `userId` in one place and `user_id` in another)
+- **Include a spec task for API contract validation** — Recommend a spec (or acceptance criteria within existing specs) that verifies frontend API calls match backend endpoint signatures, request/response shapes, and error codes
+- **Environment variable alignment** — Frontend and backend must use the same env var names for shared configuration (API URLs, ports, feature flags)
+
+### Step 3e: Environment Configuration
 
 **Never design for hardcoded configuration.** Always plan for environment variables:
 - All server addresses, API URLs, hostnames → environment variables
 - All API keys, tokens, secrets → environment variables
 - All database connection strings → environment variables
 - All port numbers and environment-specific values → environment variables
+- **No config files with literal values** — Config files (`config.py`, `config.js`, `settings.py`, etc.) must only read from environment variables, never contain hardcoded values. The `.env` file is the single source of truth.
 
 Include in your analysis:
 - What environment variables will be needed
-- Recommend a spec task for creating `.env.example` with documented placeholders
+- Recommend a spec task for creating `.env.example` with ALL variables templated (placeholder values + comments)
 - Note that `.env` must be in `.gitignore` (secrets never committed)
 
 ### Step 4: Find Gaps and Ambiguities

@@ -46,6 +46,7 @@ Apply the fix described in the finding:
 - **Error handling fixes**: Add specific error handling, not generic catch-alls.
 - **Dependency fixes**: Update to latest compatible version. Check for breaking changes.
 - **Architecture fixes**: Make the smallest structural change that addresses the issue.
+- **Contract fixes**: When fixing frontend/backend mismatches, update BOTH sides to match a single source of truth (shared types, API schema, or the backend's actual implementation). Never fix only one side.
 
 ## Phase 3: Test
 

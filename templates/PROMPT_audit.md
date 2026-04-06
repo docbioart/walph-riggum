@@ -47,7 +47,8 @@ Review the current batch of files against each applicable category:
 
 ### Security
 - OWASP Top 10 vulnerabilities (injection, XSS, CSRF, etc.)
-- Hardcoded secrets, API keys, or credentials
+- Hardcoded secrets, API keys, or credentials (including in config files like `config.py`, `config.js`, `settings.py`)
+- Config files that contain literal values instead of reading from environment variables
 - Missing input validation or sanitization
 - Authentication/authorization weaknesses
 - Insecure dependencies with known CVEs
@@ -92,6 +93,16 @@ Review the current batch of files against each applicable category:
 - Missing input validation at system boundaries
 - Unhandled promise rejections or async errors
 - Generic catch-all error handling that hides issues
+
+### Frontend/Backend Contract
+- API endpoint mismatches (frontend calls paths or methods the backend doesn't serve)
+- Request/response shape mismatches (frontend expects fields the backend doesn't return, or sends fields the backend doesn't accept)
+- Field naming inconsistencies (camelCase vs snake_case, different names for the same concept)
+- Status code handling mismatches (frontend handles codes the backend never sends, or doesn't handle codes it does send)
+- Shared type definitions that have diverged between frontend and backend
+- Environment variable name mismatches between frontend and backend for shared config
+- Hardcoded API URLs or paths in frontend that don't match backend routes
+- Missing or outdated API schema/contract definitions
 
 ### Testing
 - Missing tests for critical business logic

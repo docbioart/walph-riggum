@@ -91,10 +91,19 @@ Apply these principles when designing the architecture:
    - All server addresses, API URLs, and hostnames must come from environment variables
    - All API keys, tokens, and secrets must come from environment variables
    - All database connection strings must come from environment variables
-   - Plan a task to create `.env.example` with all required variables documented
+   - **No config files with literal values** — A `config.py`, `config.js`, or `settings.py` is only valid if every value is read from environment variables. The `.env` file is the single source of truth for all configuration.
+   - Plan a task to create `.env.example` with ALL required variables templated with placeholder values and comments
    - Ensure `.gitignore` includes `.env` (never commit secrets)
 
-6. **UI Testing is Mandatory** - If the project has a UI:
+6. **Frontend/Backend Contract Alignment** - If the project has both frontend and backend:
+   - Plan a task (or integrate into existing tasks) to define shared API contracts — endpoint paths, request/response shapes, field names, status codes, and error formats
+   - Ensure frontend tasks that call backend APIs explicitly reference the backend task/spec that defines those APIs
+   - Plan for shared types/interfaces or an API schema (OpenAPI, shared types file, etc.) that both sides import
+   - Verify variable/field naming is consistent — same field names, same enum values, same error codes on both sides
+   - If frontend and backend are separate packages/services, plan a contract test or validation step that catches mismatches before they reach production
+   - Environment variables shared between frontend and backend (API URLs, ports, feature flags) must use the same names
+
+7. **UI Testing is Mandatory** - If the project has a UI:
    - Plan for E2E/UI testing tasks using chrome-devtools MCP
    - Compile success ≠ working UI - actual browser testing required
    - Include tasks that verify UI renders and functions correctly

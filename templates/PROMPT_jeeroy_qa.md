@@ -128,11 +128,26 @@ Each spec file should follow this format:
 5. **List files to create** - Help Claude know what to build
 6. **Order matters** - Generate foundational specs first (setup, auth) before dependent ones
 
+## Frontend/Backend Consistency
+
+When the project has both a frontend and backend:
+
+1. **Explicit API Contracts** - Every spec that defines an API endpoint must include the exact request/response shapes (field names, types, status codes). Frontend and backend specs must reference the same contract.
+2. **Shared Types** - If both sides use the same data structures (user objects, API responses, error codes), recommend a shared types/schema definition so they stay in sync.
+3. **Matching Variable Names** - Ensure field names are consistent across frontend and backend specs (e.g., don't use `userId` on the frontend and `user_id` on the backend without a documented mapping).
+4. **Cross-Reference Specs** - When generating specs, explicitly note which backend spec a frontend spec depends on (and vice versa) so the build phase can verify consistency.
+
 ## Architecture Defaults
 
 When designing new projects from scratch:
 
-1. **Docker-First** - Default to Docker containers for all services:
+1. **Environment Variables Only** - Never design specs with hardcoded configuration:
+   - All config values (URLs, ports, keys, DB strings) must come from environment variables via `.env`
+   - Config files (`config.py`, `config.js`, `settings.py`) must only read from env vars, never contain literal values
+   - Every variable must be templated in `.env.example` with placeholder values and comments
+   - `.env` is the single source of truth for all configuration
+
+2. **Docker-First** - Default to Docker containers for all services:
    - Use Docker Compose for local development
    - Containerize databases (Postgres, Redis, etc.) rather than requiring local installs
    - Design with environment variables for configuration

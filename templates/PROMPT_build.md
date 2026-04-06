@@ -41,21 +41,49 @@ Write the code for your selected task:
 
 - **No Over-Engineering** - Don't add features, config options, or flexibility not in the specs. Don't create abstractions for single-use cases. Three similar lines are better than a premature helper function.
 
+### Frontend/Backend Consistency (Critical)
+
+When implementing a task that touches BOTH frontend and backend, or either side of an API boundary:
+
+1. **Verify the contract** — Before writing frontend code that calls a backend API (or vice versa), read the other side's code to confirm: endpoint path, HTTP method, request body/params, response shape (field names and types), and error responses all match exactly.
+2. **Shared types** — If a shared types file, OpenAPI spec, or API schema exists, import from it. Never duplicate type definitions across frontend and backend. If no shared types exist and you're defining a new API, create the types in a shared location.
+3. **Field name consistency** — Use identical field names on both sides. If the backend returns `user_id`, the frontend must expect `user_id` (not `userId`) unless there is an explicit mapping layer. Check for camelCase vs snake_case mismatches.
+4. **Status codes and error shapes** — Frontend error handling must match the actual error responses the backend sends. Read the backend error handling code to verify.
+5. **Environment variables** — Frontend and backend must use the same env var names for shared config (e.g., both use `API_BASE_URL`, not `API_URL` on one side and `BACKEND_URL` on the other).
+
+If you find a mismatch between frontend and backend, fix it as part of your current task. Do not leave mismatches for a future iteration.
+
 ### Environment Configuration (Critical)
 
-**NEVER hardcode any of the following in source code:**
+**NEVER hardcode any of the following — not in source code, not in config files (`config.py`, `config.js`, `settings.py`, `constants.ts`, etc.), not anywhere in the repo:**
 - Server addresses, hostnames, or URLs (API endpoints, database hosts, etc.)
 - API keys, tokens, or secrets
 - Database connection strings, usernames, or passwords
 - Port numbers
 - Environment-specific values (dev/staging/prod)
 
+**Do NOT create config files that contain literal values.** A `config.py` or `config.js` is only valid if it reads every value from environment variables. The `.env` file is the single source of truth for all configuration values.
+
 **Always use environment variables via `.env` file:**
 
 1. **Read from environment** - Use `process.env.VAR_NAME` (Node), `os.environ['VAR_NAME']` (Python), etc.
-2. **Provide defaults only for non-sensitive values** - e.g., `process.env.PORT || 3000` is OK, but never default API keys
-3. **Create/update `.env.example`** - Include all required variables with placeholder values and comments
-4. **Never commit `.env`** - Ensure `.gitignore` includes `.env` (but NOT `.env.example`)
+2. **Config files must be thin wrappers** - If you create a `config.py`, `config.js`, or similar, every value must come from `os.environ` / `process.env`. Example:
+   ```python
+   # config.py - CORRECT
+   import os
+   DATABASE_URL = os.environ["DATABASE_URL"]
+   API_KEY = os.environ["API_KEY"]
+   PORT = int(os.environ.get("PORT", "3000"))
+   ```
+   ```python
+   # config.py - WRONG (hardcoded values)
+   DATABASE_URL = "postgresql://localhost:5432/mydb"
+   API_KEY = "sk-abc123"
+   PORT = 3000
+   ```
+3. **Provide defaults only for non-sensitive values** - e.g., `process.env.PORT || 3000` is OK, but never default API keys
+4. **Create/update `.env.example`** - Every variable used in the project must be templated here with placeholder values and comments. This is the documentation for what `.env` should contain.
+5. **Never commit `.env`** - Ensure `.gitignore` includes `.env` (but NOT `.env.example`)
 
 Example `.env.example`:
 ```bash
@@ -164,6 +192,7 @@ Do not mark UI tasks complete without verifying the UI actually works in a brows
 5. **STUCK SIGNAL** - If truly stuck after multiple attempts, output `RALPH_STUCK` and explain why
 6. **KISS OVER CLEVER** - Simple, readable code beats clever, compact code. Optimize for understanding.
 7. **DRY CHECK** - Before adding new code, search for existing similar patterns to reuse
+8. **CONTRACT CHECK** - If your task touches an API boundary, verify frontend and backend match (endpoints, field names, types, error shapes) BEFORE committing
 
 ## Output
 
