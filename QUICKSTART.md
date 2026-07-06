@@ -1,5 +1,28 @@
 # Walph Riggum - Quick Start Guide
 
+## The Process at a Glance
+
+Walph is spec-driven from start to finish. Your specs are the source of truth at every phase:
+
+```
+ YOU                WALPH
+ ─────────────      ──────────────────────────────────────────────
+ 1. Write specs  →  lint: checks specs have requirements,
+    specs/*.md         acceptance criteria, and examples
+                 →  2. PLAN (Opus): tasks in IMPLEMENTATION_PLAN.md,
+                       each tagged [spec: file.md] (Done when: check)
+ 3. Review plan  →  4. BUILD (Sonnet): one task per iteration —
+    (edit freely)      re-read the spec, implement, run the task's
+                       "Done when" check, commit
+                 →  5. VERIFY (Opus): exercise every acceptance
+                       criterion in the specs (tests, curl, browser);
+                       passes get checked off in the spec files,
+                       failures become new plan tasks
+                 →  6. Loop back to BUILD if verify filed fix tasks
+```
+
+Each iteration runs with fresh context. Memory lives in files: the plan's checkboxes, the specs' acceptance criteria, git commits, and a short handoff note passed from one iteration to the next. The loop only ends when the checkboxes on disk agree — Claude saying "done" isn't enough.
+
 ## What Walph Needs to Run
 
 Walph requires **3 things** in your project directory:
@@ -26,10 +49,10 @@ Use `setup` to add Walph to a project you already have.
 
 ---
 
-## Option A: Initialize New Project
+## Step 1, Option A: Initialize New Project
 
 ```bash
-# From the ralphwiggum directory:
+# From the walph-riggum directory:
 ./walph.sh init my-project --stack node    # or: python, swift, kotlin
 
 # This creates the directory structure with templates
@@ -38,7 +61,7 @@ cd my-project
 
 ---
 
-## Option B: Setup Existing Project
+## Step 1, Option B: Setup Existing Project
 
 ```bash
 # Navigate to your project
@@ -63,7 +86,13 @@ Walph will:
 
 ## Step 2: Write Your Spec
 
-Copy `specs/TEMPLATE.md` to a new file with your requirements. Walph reads ALL `.md` files in `specs/`.
+Copy `specs/TEMPLATE.md` to a new file with your requirements. Walph reads ALL `.md` files in `specs/` (except `README.md`, `TEMPLATE.md`, and `decisions.md`).
+
+Three sections are load-bearing — `walph plan` lints for them and warns if they're missing:
+
+- **Requirements** — what must exist, specific and testable
+- **Acceptance Criteria** — checkboxes (`- [ ]`) that the verify phase will actually exercise and check off. Write each one as something that can be demonstrated: a test that passes, a curl that returns the right shape, a page that renders.
+- **Examples** — concrete input/output pairs, including edge cases. The verify phase uses these as its test cases.
 
 ### Spec Template
 
@@ -214,16 +243,23 @@ npm run lint
 ```
 
 Walph will:
-1. Read all specs in `specs/`
-2. Read `AGENTS.md`
-3. Generate `IMPLEMENTATION_PLAN.md` with tasks
+1. **Lint your specs** — warns about missing Requirements / Acceptance Criteria / Examples sections (and asks whether to continue)
+2. Read all specs in `specs/` and `AGENTS.md`
+3. Generate `IMPLEMENTATION_PLAN.md` with tasks in this format:
+
+```markdown
+- [ ] Task 1.1: Implement POST /shorten [spec: url-shortener.md] (Done when: npm test passes for shorten route)
+```
+
+The `[spec: ...]` tag tells the build phase which spec to re-read for details. The `(Done when: ...)` clause is the task's definition of done — the build phase runs that check before committing.
 
 ### Review the Plan
 
-Open `IMPLEMENTATION_PLAN.md` and verify:
-- Tasks are small and specific
+This is the cheapest quality gate in the whole pipeline — 30 seconds here saves build iterations later. Open `IMPLEMENTATION_PLAN.md` and verify:
+- Tasks are small and specific (one iteration each)
 - Order makes sense
-- Nothing is missing
+- Every spec requirement is covered by some task
+- Each task points at the right spec
 
 Edit manually if needed before building.
 
@@ -235,13 +271,17 @@ Edit manually if needed before building.
 ../walph.sh build --max-iterations 20
 ```
 
-Walph will loop:
+Walph will loop, one task per fresh-context iteration:
 1. Pick first unchecked task `- [ ]`
-2. Implement it
-3. Run tests
-4. Mark complete `- [x]`
-5. Commit
+2. Re-read the spec the task references
+3. Implement it
+4. Run the task's `(Done when: ...)` check, then tests/lint from `AGENTS.md`
+5. Mark complete `- [x]` and commit
 6. Repeat
+
+Each iteration also receives a short note about what the previous iteration did (and warnings if the loop is losing traction), so fresh contexts don't repeat mistakes.
+
+Claude reporting "all done" is not trusted on its own: the loop keeps going as long as `IMPLEMENTATION_PLAN.md` has unchecked tasks on disk.
 
 ### Monitor Progress
 
@@ -254,6 +294,30 @@ tail -f .walph/logs/walph_*.log
 
 # See git history
 git log --oneline
+
+# Per-iteration duration and API cost (requires jq)
+cat .walph/logs/walph_*_summary.csv
+```
+
+---
+
+## Step 6: Verification (Automatic)
+
+When the build completes, Walph automatically chains into **verify mode** — the phase that makes the process spec-driven rather than plan-driven:
+
+1. Reads every spec and finds unchecked acceptance criteria
+2. **Exercises** each one — runs tests, curls endpoints, drives the UI in a real browser (chrome-devtools MCP). Reading the code doesn't count.
+3. Criteria that pass get checked off `- [x]` in the spec file itself
+4. Criteria that fail get annotated `*(FAILING: reason)*` and a fix task is added to `IMPLEMENTATION_PLAN.md` under `### Verification Fixes`
+
+If verify filed fix tasks, run `walph build` again to address them, then verify re-runs. The project is done when the **specs'** checkboxes are all checked — not the plan's.
+
+```bash
+# Run verification manually anytime
+../walph.sh verify
+
+# Opt out of auto-verify after build
+export WALPH_SKIP_VERIFY=true
 ```
 
 ---
@@ -262,7 +326,9 @@ git log --oneline
 
 | Condition | Meaning |
 |-----------|---------|
-| `completion_level: HIGH` + `EXIT_SIGNAL: true` | All tasks done! |
+| `EXIT_SIGNAL: true` + no unchecked boxes on disk | All tasks done — verify phase starts |
+| Verify completes, all spec criteria checked | Project done, for real |
+| Verify filed fix tasks | Run `walph build` again |
 | Max iterations reached | Hit limit, may need more |
 | Circuit breaker: no changes | Stuck, not making progress |
 | Circuit breaker: same error | Hitting same error repeatedly |
@@ -286,11 +352,15 @@ cat .walph/logs/walph_*.log | tail -100
 ```
 my-project/
 ├── .walph/
-│   ├── config              # Override defaults here
-│   ├── logs/               # Session logs
-│   ├── state/              # Circuit breaker state
+│   ├── config              # Override defaults here (models, thresholds)
+│   ├── logs/               # Session logs + per-iteration cost CSV
+│   ├── state/              # Circuit breaker state + iteration handoff note
 │   ├── PROMPT_plan.md      # Planning prompt (customizable)
-│   └── PROMPT_build.md     # Building prompt (customizable)
+│   ├── PROMPT_build.md     # Building prompt (customizable)
+│   ├── PROMPT_verify.md    # Verification prompt (customizable)
+│   └── PRINCIPLES.md       # Engineering rules injected into every prompt
+│                           #   (env-var config, Docker ports, FE/BE contracts,
+│                           #    UI testing) — edit to change the rules
 ├── specs/
 │   └── TEMPLATE.md         # Your requirements go here
 ├── AGENTS.md               # Build/test commands
@@ -306,11 +376,14 @@ my-project/
 # Initialize new project
 walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 
-# Run planning (generates IMPLEMENTATION_PLAN.md)
+# Run planning (lints specs, generates IMPLEMENTATION_PLAN.md)
 ./walph.sh plan [--max-iterations N] [--model opus]
 
-# Run building (implements from plan)
+# Run building (implements from plan, chains into verify when done)
 ./walph.sh build [--max-iterations N] [--model sonnet]
+
+# Verify implementation against spec acceptance criteria
+./walph.sh verify [--max-iterations N] [--model opus]
 
 # Check status
 ./walph.sh status
@@ -326,9 +399,12 @@ walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 
 ## Tips
 
-1. **Start small** - First project should be simple (like the calculator example)
+1. **Start small** - First project should be simple (like the URL shortener example)
 2. **Be specific in specs** - Vague requirements = vague results
-3. **Include examples** - Show expected inputs/outputs
-4. **List files to create** - Helps Walph understand scope
-5. **Review the plan** - Edit `IMPLEMENTATION_PLAN.md` before building if needed
-6. **Watch the logs** - `tail -f .walph/logs/*.log`
+3. **Write acceptance criteria you can demonstrate** - The verify phase will actually run them. "Works correctly" can't be verified; "GET /x7k9m2 returns a 302" can.
+4. **Include examples** - They double as verify's test cases
+5. **List files to create** - Helps Walph understand scope
+6. **Review the plan** - Edit `IMPLEMENTATION_PLAN.md` before building if needed
+7. **Watch the logs** - `tail -f .walph/logs/*.log`
+8. **Check the cost CSV** - `.walph/logs/*_summary.csv`. An expensive iteration usually means an under-specified task or spec.
+9. **Tune the rules** - `.walph/PRINCIPLES.md` holds the engineering rules every phase follows; edit it to match your team's conventions.
