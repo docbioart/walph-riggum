@@ -44,46 +44,15 @@ Extract:
 - Security requirements
 - Environment/deployment details
 
-### Step 3b: Recommend Docker-First Architecture
+### Step 3b: Apply Architecture Defaults
 
-When designing new projects from scratch, **default to Docker containers**:
-- Recommend Docker Compose for local development
-- Include containerized databases (Postgres, Redis, etc.) rather than local installs
-- Design services to be container-ready with proper environment variable configuration
-- Include health checks and proper startup/shutdown handling
-- **Never assume default ports are available** - All exposed ports must be configurable via environment variables (e.g., `${DB_PORT:-5432}:5432`). Common ports like 3000, 5432, 8080, 6379 are often already in use on developer machines.
-- This ensures consistent environments and easier deployment
+New projects must comply with the shared engineering principles below (Docker-first, environment-variable-only configuration, explicit frontend/backend contracts, mandatory UI testing). When analyzing, capture what the specs will need to satisfy them:
 
-### Step 3c: Plan for UI Testing
+- List the environment variables the project will need, and recommend a spec task for creating `.env.example` (all variables templated with placeholders + comments, `.env` in `.gitignore`)
+- If the project has both frontend and backend: define the API contract explicitly (method, path, request/response shapes, error responses), flag any field-naming ambiguity in the docs (e.g., `userId` vs `user_id`), and recommend a spec or acceptance criteria for contract validation
+- If the project has a UI: include UI/E2E testing requirements (chrome-devtools MCP) in the proposed specs
 
-If the project has any user interface (web, mobile, desktop):
-- Include UI/E2E testing requirements in the spec
-- Recommend using chrome-devtools MCP for browser testing
-- Note that compile/build success does NOT mean the UI works - actual browser testing is required
-- Plan for test scenarios that verify the UI actually renders and functions correctly
-
-### Step 3d: Frontend/Backend API Contract
-
-If the project has both a frontend and backend (fullstack, API + client, etc.):
-- **Define the API contract explicitly** — Every endpoint must specify: HTTP method, path, request body/params, response shape (with field names and types), and error responses
-- **Shared types/interfaces** — Identify data structures used by both frontend and backend. Recommend a shared types/schema file or OpenAPI spec so both sides reference the same source of truth
-- **Variable naming consistency** — Ensure field names, enum values, and status codes are identical on both sides. Flag any ambiguity (e.g., docs say `userId` in one place and `user_id` in another)
-- **Include a spec task for API contract validation** — Recommend a spec (or acceptance criteria within existing specs) that verifies frontend API calls match backend endpoint signatures, request/response shapes, and error codes
-- **Environment variable alignment** — Frontend and backend must use the same env var names for shared configuration (API URLs, ports, feature flags)
-
-### Step 3e: Environment Configuration
-
-**Never design for hardcoded configuration.** Always plan for environment variables:
-- All server addresses, API URLs, hostnames → environment variables
-- All API keys, tokens, secrets → environment variables
-- All database connection strings → environment variables
-- All port numbers and environment-specific values → environment variables
-- **No config files with literal values** — Config files (`config.py`, `config.js`, `settings.py`, etc.) must only read from environment variables, never contain hardcoded values. The `.env` file is the single source of truth.
-
-Include in your analysis:
-- What environment variables will be needed
-- Recommend a spec task for creating `.env.example` with ALL variables templated (placeholder values + comments)
-- Note that `.env` must be in `.gitignore` (secrets never committed)
+{{PRINCIPLES}}
 
 ### Step 4: Find Gaps and Ambiguities
 

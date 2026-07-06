@@ -22,6 +22,7 @@ source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
+source "$SCRIPT_DIR/lib/spec_lint.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/runner.sh"
 
@@ -237,6 +238,22 @@ load_goodbunny_config() {
 
     # Set resume command for rate limit handler
     export RESUME_COMMAND="goodbunny $MODE"
+
+    # Shared engineering principles injected into prompts ({{PRINCIPLES}})
+    if [[ -f "$PROJECT_DIR/$GB_DIR/PRINCIPLES.md" ]]; then
+        PRINCIPLES_FILE="$PROJECT_DIR/$GB_DIR/PRINCIPLES.md"
+    else
+        PRINCIPLES_FILE="$SCRIPT_DIR/templates/PRINCIPLES.md"
+    fi
+    export PRINCIPLES_FILE
+
+    # Ground truth for completion: in fix mode, don't trust Claude's
+    # EXIT_SIGNAL while REVIEW_FINDINGS.md still has unchecked findings
+    if [[ "$MODE" == "fix" ]] && [[ -f "$PROJECT_DIR/REVIEW_FINDINGS.md" ]]; then
+        export COMPLETION_GROUND_TRUTH="$PROJECT_DIR/REVIEW_FINDINGS.md"
+    else
+        unset COMPLETION_GROUND_TRUTH
+    fi
 }
 
 # Get the model for the current mode
@@ -361,6 +378,7 @@ reset_gb_state() {
 
     if [[ -d "$PROJECT_DIR/$GB_STATE_DIR" ]]; then
         rm -f "$PROJECT_DIR/$GB_STATE_DIR/"*.json
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/last_iteration_note"
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -469,7 +487,8 @@ OPTIONS:
     --model MODEL         Override model for this run
     --categories LIST     Comma-separated categories to review
                           (security,architecture,complexity,dry,kiss,
-                           dependencies,error-handling,testing)
+                           dependencies,error-handling,testing,
+                           spec-compliance)
     --files PATH          Limit review to specific files or directories
     --timeout SECONDS     Iteration timeout in seconds (default: 900)
     --dry-run             Show what would be run without executing
@@ -516,7 +535,7 @@ autonomously. No setup required — just point it at your project.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   1. AUDIT (Opus)        Good Bunny reads your project and reviews it
-                         against 8 code quality categories.
+                         against 9 code quality categories.
                          Generates REVIEW_FINDINGS.md with prioritized issues.
 
   2. FIX (Sonnet)        Good Bunny picks ONE finding per iteration:
@@ -550,6 +569,8 @@ autonomously. No setup required — just point it at your project.
   Dependencies      Outdated/vulnerable packages, unused deps
   Error Handling    Missing catches, swallowed errors, validation
   Testing           Missing tests, coverage gaps, brittle tests
+  Spec Compliance   Implementation vs specs/ acceptance criteria
+                    (only for projects with specs, e.g. Walph-built)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  COMMANDS

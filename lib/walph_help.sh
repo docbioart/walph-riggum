@@ -63,6 +63,11 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
     --fast                      Enable Claude fast mode (2.5x faster, higher cost)
     --monitor                   Enable tmux monitoring view
 
+  walph verify [options]        Verify implementation against spec acceptance
+                                criteria (auto-runs after a completed build)
+    --max-iterations N          Limit iterations (default: 50)
+    --model <name>              Override model (default: opus)
+
   walph status                  Show current progress
   walph reset                   Reset circuit breaker (if stuck)
 
@@ -83,7 +88,12 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
                           - Commits changes
                           - Repeats until done
 
-  4. CIRCUIT BREAKER      Auto-stops if stuck:
+  4. VERIFY (Opus)        Claude checks the implementation against the
+                          specs' acceptance criteria — running tests,
+                          curling endpoints, browser-testing UI.
+                          Failures become new tasks in the plan.
+
+  5. CIRCUIT BREAKER      Auto-stops if stuck:
                           - No file changes for 3 iterations
                           - Same error 5 times
                           - No commits for 5 iterations
@@ -157,6 +167,8 @@ COMMANDS:
     setup             Add Walph to existing project (run 'walph setup --help' for details)
     plan              Run in planning mode (generates IMPLEMENTATION_PLAN.md)
     build             Run in building mode (implements from plan) [default]
+                      (chains into verify automatically on completion)
+    verify            Verify implementation against spec acceptance criteria
     status            Show current state and progress
     reset             Reset circuit breaker and state
 

@@ -16,7 +16,9 @@ init_circuit_breaker() {
     if [[ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
         local current_hash
         current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
-        echo "{\"no_change_count\":0,\"same_error_count\":0,\"no_commit_count\":0,\"last_error\":\"\",\"last_git_hash\":\"$current_hash\",\"iteration_history\":[]}" > "$CIRCUIT_BREAKER_STATE_FILE"
+        local tree_sig
+        tree_sig=$(_working_tree_sig)
+        echo "{\"no_change_count\":0,\"same_error_count\":0,\"no_commit_count\":0,\"last_error\":\"\",\"last_git_hash\":\"$current_hash\",\"last_tree_sig\":\"$tree_sig\",\"iteration_history\":[]}" > "$CIRCUIT_BREAKER_STATE_FILE"
     fi
 }
 
@@ -50,18 +52,39 @@ _update_state() {
 # DETECTION LOGIC
 # ============================================================================
 
-# Check if any files changed since last iteration
+# Signature of the current working tree state (dirty file list + tracked diff
+# + untracked file contents). Excludes state dirs to avoid self-resets.
+# git diff doesn't cover untracked files, and new files stay untracked until
+# committed — hash their contents too, or edits to them are invisible.
+_working_tree_sig() {
+    {
+        git status --porcelain 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' || true
+        git diff 2>/dev/null || true
+        git ls-files --others --exclude-standard 2>/dev/null \
+            | grep -v '\.walph/state/\|\.goodbunny/state/' \
+            | while IFS= read -r f; do
+                [[ -f "$f" ]] && git hash-object "$f" 2>/dev/null
+              done || true
+    } | git hash-object --stdin 2>/dev/null || echo "no-git"
+}
+
+# Check if any files changed since last iteration.
+# Compares the working tree SIGNATURE, not just "is the tree dirty" — a dirty
+# tree left behind by an aborted iteration would otherwise count as progress
+# on every subsequent iteration, permanently defeating the no-change breaker.
 check_file_changes() {
     local current_hash
     current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
     local last_hash
     last_hash=$(_read_state "last_git_hash")
 
-    # Check working directory changes (exclude state dirs to avoid self-resets)
-    local working_changes
-    working_changes=$(git status --porcelain 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' | wc -l | tr -d ' ')
+    local tree_sig
+    tree_sig=$(_working_tree_sig)
+    local last_tree_sig
+    last_tree_sig=$(_read_state "last_tree_sig")
+    _update_state "last_tree_sig" "$tree_sig"
 
-    if [[ "$current_hash" != "$last_hash" ]] || [[ "$working_changes" -gt 0 ]]; then
+    if [[ "$current_hash" != "$last_hash" ]] || [[ "$tree_sig" != "$last_tree_sig" ]]; then
         return 0  # Changes detected
     fi
     return 1  # No changes
@@ -223,9 +246,11 @@ reset_circuit_breaker() {
     if [[ -n "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
         local current_hash
         current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+        local tree_sig
+        tree_sig=$(_working_tree_sig)
         # Use jq for safe JSON generation with --arg to prevent injection
-        jq -n --arg hash "$current_hash" \
-            '{no_change_count:0,same_error_count:0,no_commit_count:0,last_error:"",last_git_hash:$hash,iteration_history:[]}' \
+        jq -n --arg hash "$current_hash" --arg sig "$tree_sig" \
+            '{no_change_count:0,same_error_count:0,no_commit_count:0,last_error:"",last_git_hash:$hash,last_tree_sig:$sig,iteration_history:[]}' \
             > "$CIRCUIT_BREAKER_STATE_FILE"
     fi
 }

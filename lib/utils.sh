@@ -15,6 +15,23 @@ command_exists() {
     command -v "$1" &>/dev/null
 }
 
+# Replace every occurrence of a placeholder with literal replacement text.
+# Safe for replacement text containing &, \, or other characters that bash
+# ${var//pat/rep} interprets on some versions (patsub_replacement in 5.2+).
+# Usage: substitute_placeholder "$content" "{{NAME}}" "$replacement"
+substitute_placeholder() {
+    local content="$1"
+    local placeholder="$2"
+    local replacement="$3"
+    local result=""
+
+    while [[ "$content" == *"$placeholder"* ]]; do
+        result+="${content%%"$placeholder"*}$replacement"
+        content="${content#*"$placeholder"}"
+    done
+    printf '%s' "$result$content"
+}
+
 # Check required dependencies
 check_dependencies() {
     local missing=()

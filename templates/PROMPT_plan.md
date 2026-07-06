@@ -4,6 +4,8 @@ You are an autonomous coding agent operating in PLANNING mode.
 
 **Iteration:** {{ITERATION}} of {{MAX_ITERATIONS}}
 
+{{LAST_ITERATION}}
+
 ## Your Mission
 
 Generate or update an IMPLEMENTATION_PLAN.md that breaks down the project requirements into actionable, well-ordered tasks.
@@ -46,15 +48,15 @@ Create or update IMPLEMENTATION_PLAN.md with:
 ## Tasks
 
 ### Phase 1: Foundation
-- [ ] Task 1.1: [Specific, actionable description]
-- [ ] Task 1.2: [Specific, actionable description]
+- [ ] Task 1.1: [Specific, actionable description] [spec: feature-name.md] (Done when: [verification command or check])
+- [ ] Task 1.2: [Specific, actionable description] [spec: feature-name.md] (Done when: [verification command or check])
 
 ### Phase 2: Core Features
-- [ ] Task 2.1: [Specific, actionable description]
-- [ ] Task 2.2: [Specific, actionable description]
+- [ ] Task 2.1: [Specific, actionable description] [spec: other-feature.md] (Done when: [verification command or check])
+- [ ] Task 2.2: [Specific, actionable description] [spec: other-feature.md] (Done when: [verification command or check])
 
 ### Phase 3: Polish & Testing
-- [ ] Task 3.1: [Specific, actionable description]
+- [ ] Task 3.1: [Specific, actionable description] [spec: feature-name.md] (Done when: [verification command or check])
 
 ## Dependencies
 [List of packages/libraries needed with versions]
@@ -70,43 +72,18 @@ Each task should:
 - Have clear acceptance criteria
 - List files that will be created/modified
 - Note any blockers or dependencies on other tasks
+- **Cite its source spec** with `[spec: filename.md]` — the build phase re-reads that spec for details (examples, error cases, exact field names) that don't fit in a task line. Tasks not derived from a spec (e.g., scaffolding) may omit this.
+- **Name its verification** with `(Done when: ...)` — a concrete command or check that proves the task is complete, e.g., `(Done when: npm test tests/users.test.js passes)` or `(Done when: curl POST /users returns 201 with id field)`. This is what the build phase runs before marking the task done.
 
 ## Design Principles
 
-Apply these principles when designing the architecture:
+Design the architecture and tasks so the project complies with the shared engineering principles below. In particular, the plan must include:
 
-1. **DRY (Don't Repeat Yourself)** - Identify shared patterns and plan for reusable components. If similar logic appears in multiple places, plan a shared utility or base class.
+- A task to create `.env.example` with ALL required variables templated (placeholder values + comments), and `.gitignore` covering `.env`
+- If the project has both frontend and backend: a task defining the shared API contract (or shared types/OpenAPI schema), frontend tasks explicitly referencing the backend spec/task that defines the APIs they call, and a contract test or validation step
+- If the project has a UI: E2E/UI testing tasks using chrome-devtools MCP
 
-2. **KISS (Keep It Simple, Stupid)** - Prefer simple, straightforward solutions over clever ones. Avoid over-engineering. The simplest approach that meets requirements is usually best.
-
-3. **YAGNI (You Aren't Gonna Need It)** - Don't plan for hypothetical future features. Only plan what's in the specs.
-
-4. **Docker-First** - For new projects, plan for containerized deployment:
-   - Docker Compose for local development
-   - Containerized databases and services
-   - Environment variable configuration
-   - **Never assume default ports are available** - All container ports must be configurable via environment variables (e.g., `${APP_PORT:-3000}:3000`). Common ports like 3000, 5432, 8080, 6379 are often in use.
-
-5. **Environment Configuration** - Never plan for hardcoded configuration:
-   - All server addresses, API URLs, and hostnames must come from environment variables
-   - All API keys, tokens, and secrets must come from environment variables
-   - All database connection strings must come from environment variables
-   - **No config files with literal values** — A `config.py`, `config.js`, or `settings.py` is only valid if every value is read from environment variables. The `.env` file is the single source of truth for all configuration.
-   - Plan a task to create `.env.example` with ALL required variables templated with placeholder values and comments
-   - Ensure `.gitignore` includes `.env` (never commit secrets)
-
-6. **Frontend/Backend Contract Alignment** - If the project has both frontend and backend:
-   - Plan a task (or integrate into existing tasks) to define shared API contracts — endpoint paths, request/response shapes, field names, status codes, and error formats
-   - Ensure frontend tasks that call backend APIs explicitly reference the backend task/spec that defines those APIs
-   - Plan for shared types/interfaces or an API schema (OpenAPI, shared types file, etc.) that both sides import
-   - Verify variable/field naming is consistent — same field names, same enum values, same error codes on both sides
-   - If frontend and backend are separate packages/services, plan a contract test or validation step that catches mismatches before they reach production
-   - Environment variables shared between frontend and backend (API URLs, ports, feature flags) must use the same names
-
-7. **UI Testing is Mandatory** - If the project has a UI:
-   - Plan for E2E/UI testing tasks using chrome-devtools MCP
-   - Compile success ≠ working UI - actual browser testing required
-   - Include tasks that verify UI renders and functions correctly
+{{PRINCIPLES}}
 
 ## Guards
 

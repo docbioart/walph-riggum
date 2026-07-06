@@ -156,13 +156,13 @@ run_setup() {
     mkdir -p "$target_dir/.walph/logs"
     mkdir -p "$target_dir/.walph/state"
 
-    # Copy prompt templates
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_plan.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_plan.md" "$target_dir/.walph/"
-    fi
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_build.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_build.md" "$target_dir/.walph/"
-    fi
+    # Copy prompt templates (plus shared principles, customizable per project)
+    local tmpl
+    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PRINCIPLES.md; do
+        if [[ -f "$SCRIPT_DIR/templates/$tmpl" ]]; then
+            cp "$SCRIPT_DIR/templates/$tmpl" "$target_dir/.walph/"
+        fi
+    done
 
     # Create config file
     cat > "$target_dir/.walph/config" << 'EOF'
@@ -187,32 +187,12 @@ EOF
         log_info "Creating specs directory..."
         mkdir -p "$target_dir/specs"
 
-        # Add spec template
-        cat > "$target_dir/specs/TEMPLATE.md" << 'EOF'
-# Feature: [Feature Name]
-
-## Overview
-
-[1-2 sentences: What are we building and why?]
-
-## Requirements
-
-### Must Have
-
-1. [Specific, testable requirement]
-2. [Specific, testable requirement]
-
-## Technical Details
-
-### Files to Modify/Create
-
-- `[path/to/file]` - [What changes]
-
-## Acceptance Criteria
-
-- [ ] [Criterion 1]
-- [ ] All tests pass
-EOF
+        # Add spec template — single source of truth in templates/specs/TEMPLATE.md
+        if [[ -f "$SCRIPT_DIR/templates/specs/TEMPLATE.md" ]]; then
+            cp "$SCRIPT_DIR/templates/specs/TEMPLATE.md" "$target_dir/specs/TEMPLATE.md"
+        else
+            log_warn "Spec template not found at $SCRIPT_DIR/templates/specs/TEMPLATE.md — skipping"
+        fi
     else
         log_info "specs/ directory already exists - keeping existing files"
     fi

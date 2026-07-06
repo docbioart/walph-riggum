@@ -9,6 +9,7 @@
 DEFAULT_MAX_ITERATIONS=50
 DEFAULT_MODEL_PLAN="opus"
 DEFAULT_MODEL_BUILD="sonnet"
+DEFAULT_MODEL_VERIFY="opus"
 DEFAULT_LOG_DIR=".walph/logs"
 DEFAULT_STATE_DIR=".walph/state"
 
@@ -47,7 +48,7 @@ load_config() {
 
                 # Only allow known configuration variables
                 case "$key" in
-                    MAX_ITERATIONS|MODEL_PLAN|MODEL_BUILD|LOG_DIR|STATE_DIR|ITERATION_TIMEOUT|\
+                    MAX_ITERATIONS|MODEL_PLAN|MODEL_BUILD|MODEL_VERIFY|LOG_DIR|STATE_DIR|ITERATION_TIMEOUT|\
                     CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
                     CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|RATE_LIMIT_RETRY_DELAY)
                         # Safe assignment using eval with proper quoting
@@ -62,6 +63,7 @@ load_config() {
     MAX_ITERATIONS="${WALPH_MAX_ITERATIONS:-${MAX_ITERATIONS:-$DEFAULT_MAX_ITERATIONS}}"
     MODEL_PLAN="${WALPH_MODEL_PLAN:-${MODEL_PLAN:-$DEFAULT_MODEL_PLAN}}"
     MODEL_BUILD="${WALPH_MODEL_BUILD:-${MODEL_BUILD:-$DEFAULT_MODEL_BUILD}}"
+    MODEL_VERIFY="${WALPH_MODEL_VERIFY:-${MODEL_VERIFY:-$DEFAULT_MODEL_VERIFY}}"
     LOG_DIR="${WALPH_LOG_DIR:-${LOG_DIR:-$DEFAULT_LOG_DIR}}"
     STATE_DIR="${WALPH_STATE_DIR:-${STATE_DIR:-$DEFAULT_STATE_DIR}}"
     ITERATION_TIMEOUT="${WALPH_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$DEFAULT_ITERATION_TIMEOUT}}"
@@ -76,6 +78,9 @@ get_model_for_mode() {
             ;;
         build)
             echo "$MODEL_BUILD"
+            ;;
+        verify)
+            echo "$MODEL_VERIFY"
             ;;
         *)
             echo "$MODEL_BUILD"

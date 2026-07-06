@@ -59,6 +59,17 @@ You: Perfect. One more question: Should there be refresh tokens, or should users
 
 After Q&A is complete (or skipped), **write each spec file directly to the specs/ directory**. Do NOT output them to the terminal - use your file writing capability to create the actual files.
 
+**First, if any clarifying questions were asked and answered**, write `specs/decisions.md` recording each question and the user's answer (plus any assumptions you made where the user skipped). These decisions shape the specs but won't survive anywhere else — the build phase runs with fresh context and needs this record when a spec turns out to be ambiguous. Format:
+
+```markdown
+# Design Decisions (from Jeeroy Q&A)
+
+## [Topic]
+- **Q:** [question asked]
+- **A:** [user's answer]
+- **Applied in:** [which spec file(s) reflect this]
+```
+
 Each spec file should follow this format:
 
 ```markdown
@@ -128,36 +139,16 @@ Each spec file should follow this format:
 5. **List files to create** - Help Claude know what to build
 6. **Order matters** - Generate foundational specs first (setup, auth) before dependent ones
 
-## Frontend/Backend Consistency
-
-When the project has both a frontend and backend:
-
-1. **Explicit API Contracts** - Every spec that defines an API endpoint must include the exact request/response shapes (field names, types, status codes). Frontend and backend specs must reference the same contract.
-2. **Shared Types** - If both sides use the same data structures (user objects, API responses, error codes), recommend a shared types/schema definition so they stay in sync.
-3. **Matching Variable Names** - Ensure field names are consistent across frontend and backend specs (e.g., don't use `userId` on the frontend and `user_id` on the backend without a documented mapping).
-4. **Cross-Reference Specs** - When generating specs, explicitly note which backend spec a frontend spec depends on (and vice versa) so the build phase can verify consistency.
-
 ## Architecture Defaults
 
-When designing new projects from scratch:
+The specs you generate must design projects that comply with the shared engineering principles below. Concretely, that means:
 
-1. **Environment Variables Only** - Never design specs with hardcoded configuration:
-   - All config values (URLs, ports, keys, DB strings) must come from environment variables via `.env`
-   - Config files (`config.py`, `config.js`, `settings.py`) must only read from env vars, never contain literal values
-   - Every variable must be templated in `.env.example` with placeholder values and comments
-   - `.env` is the single source of truth for all configuration
+- Every spec defining an API endpoint includes exact request/response shapes (field names, types, status codes), and frontend specs explicitly cross-reference the backend spec they depend on
+- A spec task exists for `.env.example` covering every environment variable, and no spec designs in hardcoded configuration
+- Docker Compose with containerized services for new projects, with all ports configurable
+- If the project has a UI, specs include UI/E2E testing requirements via chrome-devtools MCP
 
-2. **Docker-First** - Default to Docker containers for all services:
-   - Use Docker Compose for local development
-   - Containerize databases (Postgres, Redis, etc.) rather than requiring local installs
-   - Design with environment variables for configuration
-   - Include health checks and graceful shutdown handling
-
-2. **UI Testing Required** - If the project has a UI (web, mobile, desktop):
-   - Specs MUST include UI/E2E testing requirements
-   - Use chrome-devtools MCP for browser-based testing
-   - Compile success ≠ working UI. Actual browser testing is mandatory.
-   - Include test scenarios that verify UI renders and functions correctly
+{{PRINCIPLES}}
 
 ## Completion
 

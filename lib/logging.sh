@@ -125,3 +125,25 @@ log_claude_output() {
         echo "$output" >> "$WALPH_LOG_FILE"
     fi
 }
+
+# Append one line per iteration to a session summary CSV (cost, duration,
+# outcome). Expensive iterations are a strong signal of under-specified specs.
+log_iteration_summary() {
+    local iteration="$1"
+    local mode="$2"
+    local model="$3"
+    local duration="$4"
+    local cost="$5"
+    local status="$6"
+
+    [[ -z "$WALPH_LOG_FILE" ]] && return 0
+
+    local summary_file="${WALPH_LOG_FILE%.log}_summary.csv"
+    if [[ ! -f "$summary_file" ]]; then
+        echo "timestamp,iteration,mode,model,duration_seconds,cost_usd,status" > "$summary_file"
+    fi
+    # Status text may contain commas/quotes/newlines — flatten and wrap
+    local safe_status="${status//$'\n'/ | }"
+    safe_status="${safe_status//\"/\'}"
+    echo "$(date -Iseconds),$iteration,$mode,$model,$duration,${cost:-},\"$safe_status\"" >> "$summary_file"
+}

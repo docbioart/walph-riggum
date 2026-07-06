@@ -25,6 +25,7 @@ source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/converter.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
+source "$SCRIPT_DIR/lib/spec_lint.sh"
 
 # ============================================================================
 # TEMP FILE CLEANUP
@@ -312,7 +313,8 @@ estimate_tokens() {
 # PROMPT LOADING
 # ============================================================================
 
-# Load a prompt template file, returning its content on stdout
+# Load a prompt template file, returning its content on stdout.
+# Substitutes {{PRINCIPLES}} with the shared engineering principles.
 load_prompt_template() {
     local template_name="$1"
     local prompt_file="$SCRIPT_DIR/templates/$template_name"
@@ -322,7 +324,20 @@ load_prompt_template() {
         return 1
     fi
 
-    cat "$prompt_file"
+    local content
+    content=$(cat "$prompt_file")
+
+    if [[ "$content" == *"{{PRINCIPLES}}"* ]]; then
+        local principles=""
+        if [[ -f "$SCRIPT_DIR/templates/PRINCIPLES.md" ]]; then
+            principles=$(cat "$SCRIPT_DIR/templates/PRINCIPLES.md")
+        else
+            log_warn "Shared principles file not found: $SCRIPT_DIR/templates/PRINCIPLES.md"
+        fi
+        content=$(substitute_placeholder "$content" "{{PRINCIPLES}}" "$principles")
+    fi
+
+    printf '%s\n' "$content"
 }
 
 # ============================================================================
@@ -471,6 +486,13 @@ run_direct_generation() {
         printf '%s\n' "IMPORTANT: The user has requested --skip-qa mode. Do NOT ask any questions."
         printf '%s\n' "Go directly to generating spec files based on your best understanding of the documents."
         printf '%s\n' "Make reasonable assumptions where information is missing and note them in the specs."
+        printf '%s\n' ""
+        printf '%s\n' "IMPORTANT: In this mode you CANNOT write files to disk. Instead, output every spec file"
+        printf '%s\n' "in your response using EXACTLY this delimited format (one block per spec file):"
+        printf '%s\n' ""
+        printf '%s\n' "===SPEC_FILE: kebab-case-filename.md==="
+        printf '%s\n' "[complete markdown content of the spec]"
+        printf '%s\n' "===SPEC_FILE_END==="
         printf '\n---\n\n# Analysis Results\n\n'
         printf '%s\n' "$analysis_output"
         printf '\n---\n\n# Original Documents\n\n'
@@ -692,6 +714,34 @@ run_lfg_pipeline() {
         return 1
     }
 
+    # Gate: planning must have actually produced tasks before we commit to a
+    # potentially long autonomous build
+    local plan_file="$PROJECT_DIR/IMPLEMENTATION_PLAN.md"
+    if [[ ! -f "$plan_file" ]] || ! grep -qE '^[[:space:]]*- \[[ x]\]' "$plan_file"; then
+        log_error "Planning did not produce any tasks in IMPLEMENTATION_PLAN.md — not starting a build"
+        echo "  Check specs/ for clarity, then run: cd $PROJECT_DIR && walph plan"
+        return 1
+    fi
+
+    # Optional human gate: a 30-second plan review is the cheapest quality
+    # check in the pipeline. Skipped with --skip-qa or when non-interactive.
+    if [[ "$SKIP_QA" != "true" ]] && [[ -t 0 ]]; then
+        local task_count
+        task_count=$(grep -cE '^[[:space:]]*- \[ \]' "$plan_file" 2>/dev/null) || task_count=0
+        echo ""
+        log_info "Plan generated with $task_count open task(s). First tasks:"
+        grep -E '^[[:space:]]*- \[ \]' "$plan_file" | head -15 | sed 's/^/  /'
+        if [[ "$task_count" -gt 15 ]]; then
+            echo "  ... and $((task_count - 15)) more (see IMPLEMENTATION_PLAN.md)"
+        fi
+        echo ""
+        if ! ask_yes_no "Proceed to build with this plan?"; then
+            log_info "Edit IMPLEMENTATION_PLAN.md as needed, then run:"
+            echo "  cd $PROJECT_DIR && walph build"
+            return 0
+        fi
+    fi
+
     # Step 3: Run building
     log_info "Step 3/3: Running Walph building..."
     (cd "$PROJECT_DIR" && "$walph_script" build) || {
@@ -872,6 +922,16 @@ main() {
         [[ "$fname" == "TEMPLATE.md" ]] && continue
         echo "  - specs/$fname"
     done
+    echo ""
+
+    # Structural check: malformed specs burn build iterations downstream
+    log_info "Checking generated specs for structural issues..."
+    if lint_specs "$specs_dir"; then
+        log_success "Specs look structurally sound"
+    else
+        log_warn "Some specs are missing sections Walph relies on (requirements, acceptance criteria, examples)"
+        log_warn "Review and improve them in $specs_dir/ before (or during) the build"
+    fi
     echo ""
 
     # ── Step 5: LFG pipeline (if enabled) ──────────────────────────────────

@@ -4,7 +4,7 @@ An autonomous coding loop that runs Claude from the *outside* to build software 
 
 Comes with **[Jeeroy Lenkins](#jeeroy-lenkins---document-to-spec-converter)**, a companion tool that turns any pile of docs (Word, PDF, PowerPoint, markdown, etc.) into Walph-ready specs and optionally kicks off the entire pipeline with a single `--lfg` flag. Docs in, working code out.
 
-And **[Good Bunny](#good-bunny---autonomous-code-quality-reviewer)**, a code quality reviewer that audits any project for issues across 8 categories, fixes them autonomously, and can generate a comprehensive codebase documentation report. No setup required.
+And **[Good Bunny](#good-bunny---autonomous-code-quality-reviewer)**, a code quality reviewer that audits any project for issues across 9 categories, fixes them autonomously, and can generate a comprehensive codebase documentation report. No setup required.
 
 > "Me fail English? That's unpossible!" - Walph Riggum
 
@@ -65,19 +65,24 @@ Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Cla
 ```
 
 1. **You write specs** in `specs/*.md` - describe what you want built
-2. **Plan phase** (Opus) - Claude reads specs and generates a task list in `IMPLEMENTATION_PLAN.md`
-3. **Build phase** (Sonnet) - Claude picks ONE task, implements it, runs tests, marks it done, commits
-4. **Loop** - Walph restarts Claude with the updated plan, repeating until all tasks are complete
+2. **Plan phase** (Opus) - Claude reads specs and generates a task list in `IMPLEMENTATION_PLAN.md`. Each task cites its source spec (`[spec: feature.md]`) and names its verification (`(Done when: ...)`). Walph lints your specs for missing sections before planning.
+3. **Build phase** (Sonnet) - Claude picks ONE task, re-reads the spec it came from, implements it, runs tests, marks it done, commits
+4. **Verify phase** (Opus) - After the build completes, Claude exercises every acceptance criterion in your specs (tests, curl, real browser for UI), checks off the ones that pass, and files fix tasks for the ones that fail. The specs — not the plan — decide when the project is done. (Skip with `WALPH_SKIP_VERIFY=true`.)
+5. **Loop** - Walph restarts Claude with the updated plan, repeating until all tasks are complete. A short handoff note from the previous iteration is injected into each fresh context, and Claude's "I'm done" signal is only trusted when the checkboxes on disk agree.
 
 Each build iteration is independent. Claude reads the current state from files, does one task, saves its work. No context accumulation, no memory degradation.
 
 ## Features
 
-- **Dual-model strategy**: Opus for planning (smarter), Sonnet for building (faster)
+- **Dual-model strategy**: Opus for planning and verification (smarter), Sonnet for building (faster)
+- **Spec-driven end to end**: specs are linted before planning, re-read during building, and their acceptance criteria are exercised during verification
 - **Circuit breaker**: Auto-stops if Claude gets stuck (no changes, same error, no commits)
+- **Ground-truth completion**: the loop only ends when the checkboxes on disk agree, not just when Claude says so
+- **Iteration memory**: each fresh context receives a short note about what the previous iteration did (and warnings when the loop is losing traction)
+- **Cost tracking**: per-iteration duration and API cost logged to a session summary CSV (requires `jq`)
 - **Git-native**: Every completed task becomes a commit - easy to review, revert, or continue
 - **Stack templates**: Quick setup for Node.js, Python, Swift, Kotlin, Capacitor, and more
-- **Customizable prompts**: Modify `.walph/PROMPT_*.md` to change Claude's behavior
+- **Customizable prompts**: Modify `.walph/PROMPT_*.md` (and the shared rules in `.walph/PRINCIPLES.md`) to change Claude's behavior
 - **Existing project support**: `walph setup` adds Walph to any project
 
 ## Requirements
@@ -138,8 +143,10 @@ your-project/
 │   ├── config              # Settings (models, thresholds)
 │   ├── PROMPT_plan.md      # Planning prompt (customizable)
 │   ├── PROMPT_build.md     # Building prompt (customizable)
-│   ├── logs/               # Session logs
-│   └── state/              # Circuit breaker state
+│   ├── PROMPT_verify.md    # Verification prompt (customizable)
+│   ├── PRINCIPLES.md       # Shared engineering rules injected into all prompts
+│   ├── logs/               # Session logs + per-iteration cost summary CSV
+│   └── state/              # Circuit breaker state + iteration handoff note
 ├── specs/
 │   └── *.md                # Your requirements (Walph reads all .md files)
 ├── AGENTS.md               # Build/test/lint commands
@@ -152,8 +159,10 @@ your-project/
 walph                           # Show comprehensive how-to
 walph init <name> [options]     # Create new project
 walph setup [options]           # Add Walph to existing project
-walph plan                      # Generate tasks from specs
+walph plan                      # Generate tasks from specs (lints specs first)
 walph build                     # Implement tasks (the main loop)
+walph verify                    # Check implementation against spec acceptance
+                                #   criteria (auto-runs after a completed build)
 walph status                    # Show progress
 walph reset                     # Clear stuck state
 ```
@@ -200,6 +209,7 @@ Include: specific endpoints, input/output examples, error cases, files to create
 MAX_ITERATIONS=50
 MODEL_PLAN="opus"
 MODEL_BUILD="sonnet"
+MODEL_VERIFY="opus"
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
 CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
@@ -211,7 +221,9 @@ ITERATION_TIMEOUT=900  # 15 minutes; kills Claude if it hangs
 ```bash
 export WALPH_MAX_ITERATIONS=100
 export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
+export WALPH_MODEL_VERIFY="opus"
 export WALPH_ITERATION_TIMEOUT=1200  # 20 minutes per iteration
+export WALPH_SKIP_VERIFY=true    # Don't auto-run verify after build
 ```
 
 ## Circuit Breaker
@@ -269,9 +281,9 @@ Walph will prompt you: wait, exit, or continue. Usually best to wait.
 
 1. **Convert** - Jeeroy converts all documents to markdown (via pandoc)
 2. **Analyze** - Claude reads everything and identifies features, gaps, and questions
-3. **Q&A** - Claude asks you clarifying questions interactively
-4. **Generate** - Produces properly formatted spec files in `specs/`
-5. **LFG** (optional) - Chains directly into `walph setup → plan → build`
+3. **Q&A** - Claude asks you clarifying questions interactively, and records the answers in `specs/decisions.md` so build iterations can consult them
+4. **Generate** - Produces properly formatted spec files in `specs/`, then lints them for missing sections
+5. **LFG** (optional) - Chains directly into `walph setup → plan → build`. Before building, it confirms the plan actually has tasks and (unless `--skip-qa`) shows you the task list for a quick yes/no review
 
 ### Usage
 
@@ -341,7 +353,7 @@ When designing new projects, Jeeroy defaults to:
                                   └──────────────────┘
 ```
 
-1. **Audit** (Opus) - Good Bunny reads your project and reviews it against 8 code quality categories, generating `REVIEW_FINDINGS.md` with prioritized, actionable findings
+1. **Audit** (Opus) - Good Bunny reads your project and reviews it against 9 code quality categories, generating `REVIEW_FINDINGS.md` with prioritized, actionable findings
 2. **Fix** (Sonnet) - Good Bunny picks ONE finding per iteration, fixes it, runs tests, marks it done, and commits — repeating until all findings are addressed
 3. **Analyze** (Opus) - Good Bunny documents the entire codebase, generating `GOODBUNNY_REPORT.md` — a 12-section guide covering architecture, setup, patterns, testing, and more. If a prior audit exists, findings are incorporated automatically
 
@@ -383,6 +395,7 @@ goodbunny analyze --files lib/    # Scope to specific directory
 | Dependencies    | Outdated/vulnerable packages, unused deps                |
 | Error Handling  | Missing catches, swallowed errors, validation            |
 | Testing         | Missing tests, coverage gaps, brittle tests              |
+| Spec Compliance | Implementation vs `specs/` acceptance criteria (Walph-built projects) |
 
 ### Configuration
 

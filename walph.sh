@@ -16,6 +16,7 @@ source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
+source "$SCRIPT_DIR/lib/spec_lint.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/runner.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
@@ -77,6 +78,10 @@ parse_args() {
                 ;;
             build)
                 MODE="build"
+                shift
+                ;;
+            verify)
+                MODE="verify"
                 shift
                 ;;
             status)
@@ -419,6 +424,7 @@ reset_state() {
 
     if [[ -d "$PROJECT_DIR/.walph/state" ]]; then
         rm -f "$PROJECT_DIR/.walph/state/"*.json
+        rm -f "$PROJECT_DIR/.walph/state/last_iteration_note"
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -451,13 +457,13 @@ run_init() {
     mkdir -p "$target_dir/.walph/logs"
     mkdir -p "$target_dir/.walph/state"
 
-    # Copy prompt templates
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_plan.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_plan.md" "$target_dir/.walph/"
-    fi
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_build.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_build.md" "$target_dir/.walph/"
-    fi
+    # Copy prompt templates (plus shared principles, customizable per project)
+    local tmpl
+    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PRINCIPLES.md; do
+        if [[ -f "$SCRIPT_DIR/templates/$tmpl" ]]; then
+            cp "$SCRIPT_DIR/templates/$tmpl" "$target_dir/.walph/"
+        fi
+    done
 
     # Create config file
     cat > "$target_dir/.walph/config" << 'EOF'
@@ -470,6 +476,7 @@ run_init() {
 # Models (use aliases: opus, sonnet, or full model names)
 # MODEL_PLAN="opus"
 # MODEL_BUILD="sonnet"
+# MODEL_VERIFY="opus"
 
 # Circuit breaker thresholds
 # CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
@@ -517,67 +524,12 @@ Put your feature specs in this directory. Walph reads ALL `.md` files here (exce
 | Examples | Input/output pairs |
 EOF
 
-    # Spec template
-    cat > "$target_dir/specs/TEMPLATE.md" << 'EOF'
-# Feature: [Feature Name]
-
-## Overview
-
-[1-2 sentences: What are we building and why?]
-
-## Requirements
-
-### Must Have
-
-1. [Specific, testable requirement]
-2. [Specific, testable requirement]
-3. [Specific, testable requirement]
-
-## Technical Details
-
-### Files to Create
-
-- `[filename.js]` - [Purpose]
-- `[filename.test.js]` - [What it tests]
-
-### Interface/API
-
-```
-[Function signatures, CLI usage, or API endpoints]
-```
-
-## Acceptance Criteria
-
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-- [ ] All tests pass
-
-## Examples
-
-### Example 1: [Happy Path]
-
-**Input:**
-```
-[input]
-```
-
-**Output:**
-```
-[expected output]
-```
-
-### Example 2: [Edge Case]
-
-**Input:**
-```
-[edge case]
-```
-
-**Output:**
-```
-[expected output or error]
-```
-EOF
+    # Spec template — single source of truth in templates/specs/TEMPLATE.md
+    if [[ -f "$SCRIPT_DIR/templates/specs/TEMPLATE.md" ]]; then
+        cp "$SCRIPT_DIR/templates/specs/TEMPLATE.md" "$target_dir/specs/TEMPLATE.md"
+    else
+        log_warn "Spec template not found at $SCRIPT_DIR/templates/specs/TEMPLATE.md — skipping"
+    fi
 
     # Create AGENTS.md based on template and stack
     log_info "Creating AGENTS.md..."
@@ -699,6 +651,23 @@ init_walph() {
     export WALPH_MODE="$MODE"
     export TOOL_MODE="$MODE"
 
+    # Shared engineering principles injected into prompts ({{PRINCIPLES}}).
+    # Projects can customize by placing their own copy in .walph/
+    if [[ -f "$PROJECT_DIR/.walph/PRINCIPLES.md" ]]; then
+        PRINCIPLES_FILE="$PROJECT_DIR/.walph/PRINCIPLES.md"
+    else
+        PRINCIPLES_FILE="$SCRIPT_DIR/templates/PRINCIPLES.md"
+    fi
+    export PRINCIPLES_FILE
+
+    # Ground truth for completion: in build mode, don't trust Claude's
+    # EXIT_SIGNAL while the plan still has unchecked tasks on disk
+    if [[ "$MODE" == "build" ]] && [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]]; then
+        export COMPLETION_GROUND_TRUTH="$PROJECT_DIR/IMPLEMENTATION_PLAN.md"
+    else
+        unset COMPLETION_GROUND_TRUTH
+    fi
+
     # Set resume command for rate limit handler
     export RESUME_COMMAND="walph $MODE"
 
@@ -730,9 +699,47 @@ main() {
         start_monitor_session "$PROJECT_DIR/$LOG_DIR/walph_${session_id}.log" "$PROJECT_DIR"
     fi
 
+    # Spec quality gate before planning: the plan is only as good as the specs
+    if [[ "$MODE" == "plan" ]] && [[ "$DRY_RUN" != "true" ]]; then
+        log_info "Linting specs before planning..."
+        if ! lint_specs "$PROJECT_DIR/specs"; then
+            if [[ -t 0 ]]; then
+                if ! ask_yes_no "Specs have structural issues (see warnings above). Plan anyway?"; then
+                    log_info "Fix the specs in specs/ and re-run 'walph plan'"
+                    exit 0
+                fi
+            else
+                log_warn "Continuing despite spec issues (non-interactive session)"
+            fi
+        fi
+    fi
+
     # Run main loop
     main_loop
     local exit_code=$?
+
+    # After a completed build, chain into verification: check the
+    # implementation against the specs' acceptance criteria, not just the plan.
+    # Skippable with WALPH_SKIP_VERIFY=true.
+    if [[ "$MODE" == "build" ]] && [[ "${LOOP_COMPLETED:-false}" == "true" ]] \
+        && [[ "${WALPH_SKIP_VERIFY:-false}" != "true" ]] && [[ "$DRY_RUN" != "true" ]]; then
+        echo ""
+        log_info "Build complete — starting verification phase (specs are the source of truth)"
+        log_info "Skip in the future with WALPH_SKIP_VERIFY=true"
+        MODE="verify"
+        export WALPH_MODE="$MODE"
+        export TOOL_MODE="$MODE"
+        export RESUME_COMMAND="walph verify"
+        unset COMPLETION_GROUND_TRUTH
+        main_loop
+        exit_code=$?
+
+        # Verification files failing criteria as new plan tasks — surface them
+        if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]] && has_unchecked_boxes "$PROJECT_DIR/IMPLEMENTATION_PLAN.md"; then
+            echo ""
+            log_warn "Verification added fix tasks to IMPLEMENTATION_PLAN.md — run 'walph build' again to address them"
+        fi
+    fi
 
     # Summary
     echo ""
