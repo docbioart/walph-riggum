@@ -696,8 +696,10 @@ run_lfg_pipeline() {
     # Step 1: Setup walph in the project
     if [[ ! -d "$PROJECT_DIR/.walph" ]]; then
         log_info "Step 1/3: Setting up Walph..."
+        # WALPH_SETUP_INLINE suppresses the next-steps banner — the pipeline
+        # continues into plan/build immediately
         # shellcheck disable=SC2086
-        (cd "$PROJECT_DIR" && "$walph_script" setup $stack_flag) || {
+        (cd "$PROJECT_DIR" && WALPH_SETUP_INLINE=true "$walph_script" setup $stack_flag) || {
             log_error "Walph setup failed. Fix issues and run manually:"
             echo "  cd $PROJECT_DIR && walph setup"
             return 1

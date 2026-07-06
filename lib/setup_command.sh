@@ -194,7 +194,13 @@ EOF
             log_warn "Spec template not found at $SCRIPT_DIR/templates/specs/TEMPLATE.md — skipping"
         fi
     else
-        log_info "specs/ directory already exists - keeping existing files"
+        local existing_specs
+        existing_specs=$(count_spec_files "$target_dir/specs")
+        if [[ "$existing_specs" -gt 0 ]]; then
+            log_info "specs/ directory already has $existing_specs spec file(s) - keeping them"
+        else
+            log_info "specs/ directory already exists - keeping existing files"
+        fi
     fi
 
     # Create AGENTS.md if it doesn't exist (or if force)
@@ -240,10 +246,21 @@ EOF
     fi
 
     log_success "Setup complete!"
+
+    # When run inline from 'walph plan'/'walph build', skip the next-steps
+    # banner — the requested command continues immediately after
+    if [[ "${WALPH_SETUP_INLINE:-false}" == "true" ]]; then
+        return 0
+    fi
+
     echo ""
     echo "Next steps:"
     echo "  1. Review and edit AGENTS.md with your build/test commands"
-    echo "  2. Create specs in specs/ (copy TEMPLATE.md)"
+    if [[ "$(count_spec_files "$target_dir/specs")" -gt 0 ]]; then
+        echo "  2. Review the existing specs in specs/"
+    else
+        echo "  2. Create specs in specs/ (copy TEMPLATE.md)"
+    fi
     echo "  3. Run: walph plan"
     echo "  4. Review IMPLEMENTATION_PLAN.md"
     echo "  5. Run: walph build"

@@ -122,6 +122,19 @@ safe_read_file() {
     fi
 }
 
+# Count real spec files in a specs directory (excludes README.md and TEMPLATE.md).
+# Echoes 0 if the directory doesn't exist.
+count_spec_files() {
+    local specs_dir="$1"
+    # Guard the missing-dir case: under set -e/pipefail, a failing find
+    # would abort the caller
+    if [[ ! -d "$specs_dir" ]]; then
+        echo 0
+        return
+    fi
+    find "$specs_dir" -maxdepth 1 -name "*.md" -not -name "README.md" -not -name "TEMPLATE.md" | wc -l | tr -d ' '
+}
+
 # ============================================================================
 # PROMPT UTILITIES
 # ============================================================================
