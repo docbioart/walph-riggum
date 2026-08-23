@@ -125,6 +125,7 @@ _write_last_iteration_note() {
 #   0: success
 #   1: error
 #   2: user requested exit (from rate limit handler)
+#   4: network outage — connectivity has returned; retry the same iteration
 run_shared_iteration() {
     local iteration="$1"
     local prompt_file="$2"
@@ -337,6 +338,19 @@ run_shared_iteration() {
         fi
     fi
 
+    # Network outage: a connection-level failure is not Claude being stuck.
+    # Don't count it toward the circuit breaker — pause until connectivity
+    # returns, then have the main loop retry this same iteration (return 4).
+    if [[ $exit_code -ne 0 ]] && check_connection_error "$output"; then
+        log_warn "Claude could not reach the API (network down?) — pausing until connectivity returns"
+        if wait_for_connectivity; then
+            log_info "Connectivity restored — will retry iteration $iteration"
+            return 4
+        fi
+        log_error "Still offline after the maximum wait (WALPH_OFFLINE_MAX_WAIT) — giving up on this iteration"
+        return 1
+    fi
+
     # Check for API error
     if check_api_error "$output"; then
         log_error "API error detected"
@@ -464,6 +478,7 @@ run_main_loop() {
     rm -f "$PROJECT_DIR/$state_dir/completion_signal" "$PROJECT_DIR/$state_dir/stuck_signal"
 
     local iteration=1
+    local net_retry_count=0
 
     while [[ $iteration -le $MAX_ITERATIONS ]]; do
         # Check circuit breaker before iteration
@@ -500,6 +515,22 @@ run_main_loop() {
         WALPH_CURRENT_ITERATION="$iteration"
         local result=0
         run_iteration "$iteration" "$prompt_file" "$model" || result=$?
+
+        # Network-outage retry: connectivity is back — rerun the SAME
+        # iteration without burning the counter or the circuit breaker.
+        # The consecutive cap guards against a reachable-but-broken API.
+        if [[ $result -eq 4 ]]; then
+            net_retry_count=$((net_retry_count + 1))
+            if [[ $net_retry_count -le 8 ]]; then
+                log_info "Retrying iteration $iteration after connectivity pause (retry $net_retry_count)"
+                continue
+            fi
+            log_warn "Connectivity keeps failing mid-request — counting as a failed iteration"
+            result=1
+        else
+            net_retry_count=0
+        fi
+
         if [[ $result -eq 0 ]]; then
             log_success "Iteration $iteration completed successfully"
         elif [[ $result -eq 2 ]]; then

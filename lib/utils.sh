@@ -105,6 +105,34 @@ check_chrome_mcp() {
 }
 
 # ============================================================================
+# CONNECTIVITY
+# ============================================================================
+
+# Block until the Claude API endpoint is reachable again. Any HTTP response
+# (even 4xx) proves the network path works; curl only fails on
+# connection/DNS/TLS problems. Returns 0 once online, 1 after the maximum
+# wait (WALPH_OFFLINE_MAX_WAIT, default 4 hours — sized for a multi-hour
+# outage).
+wait_for_connectivity() {
+    local probe_url="${WALPH_CONNECTIVITY_URL:-https://api.anthropic.com/}"
+    local max_wait="${WALPH_OFFLINE_MAX_WAIT:-14400}"
+    local interval="${WALPH_OFFLINE_RETRY_INTERVAL:-60}"
+    local waited=0
+
+    while ! curl -s -m 10 -o /dev/null "$probe_url"; do
+        if [[ $waited -ge $max_wait ]]; then
+            return 1
+        fi
+        if (( waited % 600 == 0 )); then
+            log_warn "Offline for $((waited / 60)) min — probing every ${interval}s (giving up after $((max_wait / 60)) min)"
+        fi
+        sleep "$interval"
+        waited=$((waited + interval))
+    done
+    return 0
+}
+
+# ============================================================================
 # RUN LOCK
 # ============================================================================
 

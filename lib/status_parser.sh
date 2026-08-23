@@ -163,6 +163,15 @@ check_rate_limit() {
     return 1  # Not rate limited
 }
 
+# Check for network/connection-level failures (distinct from rate limits and
+# server errors: these mean the network is down, not that Claude is stuck —
+# the loop should pause and retry, not count them toward the circuit breaker)
+check_connection_error() {
+    local output
+    output=$(echo "$1" | tail -20)
+    echo "$output" | grep -qiE "ECONNRESET|ECONNREFUSED|ConnectionRefused|Connection dropped|Connection refused|Unable to connect|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|fetch failed|network is unreachable|CERTIFICATE_VERIFICATION_ERROR"
+}
+
 # Check for API error in output
 check_api_error() {
     local output="$1"

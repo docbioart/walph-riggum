@@ -229,6 +229,9 @@ export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
 export WALPH_MODEL_VERIFY="opus"
 export WALPH_ITERATION_TIMEOUT=1200  # 20 minutes per iteration
 export WALPH_SKIP_VERIFY=true    # Don't auto-run verify after build
+export WALPH_OFFLINE_MAX_WAIT=14400  # Max seconds to wait out a network outage
+                                     # (connection failures pause the loop and
+                                     # retry the same iteration; default 4h)
 ```
 
 ## Circuit Breaker
