@@ -5,16 +5,19 @@
 # COLORS AND FORMATTING
 # ============================================================================
 
-# Check if terminal supports colors
-if [[ -t 1 ]] && command -v tput &>/dev/null; then
-    RED=$(tput setaf 1)
-    GREEN=$(tput setaf 2)
-    YELLOW=$(tput setaf 3)
-    BLUE=$(tput setaf 4)
-    MAGENTA=$(tput setaf 5)
-    CYAN=$(tput setaf 6)
-    BOLD=$(tput bold)
-    RESET=$(tput sgr0)
+# Check if terminal supports colors. The `tput colors` probe (and the || true
+# guards) matter: with TERM=dumb/unknown, tput fails, and since this runs at
+# source time under the caller's set -e, an unguarded failure would kill the
+# tool before main() with no output at all.
+if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null; then
+    RED=$(tput setaf 1 || true)
+    GREEN=$(tput setaf 2 || true)
+    YELLOW=$(tput setaf 3 || true)
+    BLUE=$(tput setaf 4 || true)
+    MAGENTA=$(tput setaf 5 || true)
+    CYAN=$(tput setaf 6 || true)
+    BOLD=$(tput bold || true)
+    RESET=$(tput sgr0 || true)
 else
     RED=""
     GREEN=""

@@ -53,6 +53,7 @@ GB_STATE_DIR="$GB_DIR/state"
 
 MODE=""
 MAX_ITERATIONS=""
+MAX_ITERATIONS_OVERRIDE=""
 MODEL_OVERRIDE=""
 TIMEOUT_OVERRIDE=""
 DRY_RUN=false
@@ -100,7 +101,7 @@ parse_args() {
                     show_gb_help
                     exit 1
                 fi
-                MAX_ITERATIONS="$2"
+                MAX_ITERATIONS_OVERRIDE="$2"
                 shift 2
                 ;;
             --model)
@@ -210,6 +211,8 @@ load_goodbunny_config() {
                     GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_MODEL_ANALYZE|\
                     GOODBUNNY_ITERATION_TIMEOUT|\
                     GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
+                        value=$(sanitize_config_value "$value")
+                        config_value_is_valid "$key" "$value" || continue
                         # Safe assignment using eval with proper quoting
                         eval "$key=\"\$value\""
                         ;;
@@ -226,6 +229,9 @@ load_goodbunny_config() {
     ITERATION_TIMEOUT="${GOODBUNNY_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$GB_DEFAULT_ITERATION_TIMEOUT}}"
 
     # CLI flag overrides (highest priority)
+    if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
+        MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
+    fi
     if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
         ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
     fi
@@ -348,7 +354,7 @@ show_gb_status() {
         if [[ -f "$PROJECT_DIR/GOODBUNNY_REPORT.md" ]]; then
             echo "Codebase report: Found"
             local sections_complete
-            sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || echo "0")
+            sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || true)
             echo "Report sections: $sections_complete of 12"
             if [[ -f "$PROJECT_DIR/goodbunny.mermaid" ]]; then
                 echo "Architecture diagram: Found (goodbunny.mermaid)"
@@ -361,9 +367,9 @@ show_gb_status() {
         if [[ -f "$PROJECT_DIR/REVIEW_FINDINGS.md" ]]; then
             echo "Review findings: Found"
             local total_findings
-            total_findings=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || echo "0")
+            total_findings=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || true)
             local fixed_findings
-            fixed_findings=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || echo "0")
+            fixed_findings=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || true)
             echo "Findings: $fixed_findings fixed, $total_findings remaining"
         else
             echo "Review findings: Not found (run 'goodbunny audit' first)"

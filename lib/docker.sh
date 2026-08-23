@@ -32,11 +32,14 @@ create_docker_setup() {
     local template_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/templates/docker"
 
     if [[ -f "$template_dir/docker-compose.yml" && "$with_postgres" == "true" ]]; then
-        # Use template with variable substitution
-        sed -e "s/3000:3000/$app_port:$app_port/g" \
-            -e "s/POSTGRES_DB=app/POSTGRES_DB=$project_name/g" \
-            -e "s/DATABASE_URL=postgres:\/\/postgres:postgres@db:5432\/app/DATABASE_URL=postgres:\/\/postgres:postgres@db:5432\/$project_name/g" \
-            "$template_dir/docker-compose.yml" > "$target_dir/docker-compose.yml"
+        # Use template with variable substitution. substitute_placeholder
+        # (lib/utils.sh) for the project name: a name containing sed
+        # metacharacters (&, /, \) would corrupt a sed replacement
+        local compose_content
+        compose_content=$(sed -e "s/3000:3000/$app_port:$app_port/g" "$template_dir/docker-compose.yml")
+        compose_content=$(substitute_placeholder "$compose_content" "POSTGRES_DB=app" "POSTGRES_DB=$project_name")
+        compose_content=$(substitute_placeholder "$compose_content" "DATABASE_URL=postgres://postgres:postgres@db:5432/app" "DATABASE_URL=postgres://postgres:postgres@db:5432/$project_name")
+        printf '%s\n' "$compose_content" > "$target_dir/docker-compose.yml"
     elif [[ "$with_postgres" == "false" ]]; then
         # Create simplified compose file without Postgres
         cat > "$target_dir/docker-compose.yml" << EOF

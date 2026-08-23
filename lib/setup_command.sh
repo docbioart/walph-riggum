@@ -33,7 +33,11 @@ parse_setup_args() {
                 exit 1
                 ;;
             *)
-                shift
+                # A positional arg here is almost always a path the user
+                # expected setup to target — silently ignoring it would
+                # scaffold the CWD instead
+                log_error "setup takes no path argument (got: $1) — cd into the project first, then run 'walph setup'"
+                exit 1
                 ;;
         esac
     done

@@ -28,6 +28,55 @@ DEFAULT_ITERATION_TIMEOUT=900  # 15 minutes
 # CONFIGURATION LOADING
 # ============================================================================
 
+# Sanitize a raw config value: strip a trailing inline comment and one layer
+# of matching surrounding quotes. The parser assigns values literally (unlike
+# `source`), but shipped examples and docs use quoted values — without this,
+# MODEL_PLAN="opus" would reach the CLI as --model '"opus"'.
+# Usage: value=$(sanitize_config_value "$value")
+sanitize_config_value() {
+    local value="$1"
+    # Trim leading/trailing whitespace
+    while [[ "$value" == [[:space:]]* ]]; do value="${value#?}"; done
+    while [[ "$value" == *[[:space:]] ]]; do value="${value%?}"; done
+
+    # Quoted value: take the quoted content verbatim — an interior # is data,
+    # not a comment (e.g. LOG_DIR="build #1"). Anything after the closing
+    # quote (typically an inline comment) is discarded.
+    local q="${value:0:1}"
+    if [[ "$q" == '"' || "$q" == "'" ]]; then
+        local rest="${value#?}"
+        if [[ "$rest" == *"$q"* ]]; then
+            printf '%s' "${rest%%"$q"*}"
+            return 0
+        fi
+    fi
+
+    # Unquoted: strip a trailing inline comment (whitespace followed by #)
+    value="${value%%[[:space:]]#*}"
+    while [[ "$value" == *[[:space:]] ]]; do value="${value%?}"; done
+    printf '%s' "$value"
+}
+
+# Validate that a numeric config key holds a plain integer; warn and return 1
+# otherwise so callers can skip the bad value instead of breaking arithmetic.
+config_value_is_valid() {
+    local key="$1"
+    local value="$2"
+    case "$key" in
+        MAX_ITERATIONS|ITERATION_TIMEOUT|RATE_LIMIT_RETRY_DELAY|\
+        CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
+        CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|\
+        GOODBUNNY_MAX_ITERATIONS|GOODBUNNY_ITERATION_TIMEOUT|\
+        GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
+            if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+                log_warn "Ignoring config $key='$value' — must be a plain integer"
+                return 1
+            fi
+            ;;
+    esac
+    return 0
+}
+
 # Load configuration from multiple sources (later sources override earlier)
 # Priority: defaults < config file < environment variables < command line
 load_config() {
@@ -51,6 +100,8 @@ load_config() {
                     MAX_ITERATIONS|MODEL_PLAN|MODEL_BUILD|MODEL_VERIFY|LOG_DIR|STATE_DIR|ITERATION_TIMEOUT|\
                     CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
                     CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|RATE_LIMIT_RETRY_DELAY)
+                        value=$(sanitize_config_value "$value")
+                        config_value_is_valid "$key" "$value" || continue
                         # Safe assignment using eval with proper quoting
                         eval "$key=\"\$value\""
                         ;;
@@ -106,8 +157,8 @@ write_default_config() {
 # MAX_ITERATIONS=50
 
 # Models for each mode
-# MODEL_PLAN="claude-opus-4-5-20250514"
-# MODEL_BUILD="claude-sonnet-4-20250514"
+# MODEL_PLAN=opus
+# MODEL_BUILD=sonnet
 
 # Logging directory (relative to project root)
 # LOG_DIR=".walph/logs"

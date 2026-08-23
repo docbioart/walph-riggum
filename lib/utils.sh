@@ -84,6 +84,19 @@ check_chrome_mcp() {
         fi
     fi
 
+    # Claude Code's standard stores: `claude mcp add --scope user` writes
+    # ~/.claude.json; project-scope servers live in <project>/.mcp.json
+    if [[ -f "${HOME}/.claude.json" ]]; then
+        if grep -q "chrome-devtools" "${HOME}/.claude.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+    if [[ -f "${PROJECT_DIR:-.}/.mcp.json" ]]; then
+        if grep -q "chrome-devtools" "${PROJECT_DIR:-.}/.mcp.json" 2>/dev/null; then
+            chrome_mcp_found=true
+        fi
+    fi
+
     if [[ "$chrome_mcp_found" == "true" ]]; then
         return 0
     else
@@ -158,7 +171,7 @@ ask_yes_no() {
         case "$answer" in
             [Yy]* ) return 0;;
             [Nn]* ) return 1;;
-            * ) echo "Please answer yes or no.";;
+            * ) echo "Please answer yes or no." >&2;;  # stderr: callers may capture stdout
         esac
     done
 }
@@ -196,6 +209,14 @@ ask_choice() {
 handle_rate_limit() {
     local claude_output="${1:-}"
     local delay="${RATE_LIMIT_RETRY_DELAY:-60}"
+
+    # Non-interactive session (nohup, CI, overnight run): nobody can answer
+    # the prompt, so wait and retry instead of dying on a failed read
+    if [[ ! -t 0 ]]; then
+        log_warn "API rate limit detected — non-interactive session, waiting ${delay}s before retrying"
+        sleep "$delay"
+        return 0
+    fi
 
     echo ""
     log_warn "API rate limit detected"
@@ -267,7 +288,7 @@ handle_rate_limit() {
 
 # Check if running inside tmux
 in_tmux() {
-    [[ -n "$TMUX" ]]
+    [[ -n "${TMUX:-}" ]]  # :- guard: unset TMUX is fatal under set -u
 }
 
 # Start monitoring session in tmux

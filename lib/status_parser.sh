@@ -23,13 +23,18 @@
 extract_status_block() {
     local output="$1"
 
-    # Use sed to extract between markers
-    # Support both RALPH_STATUS (prompt template convention) and WALPH_STATUS (legacy)
+    # Extract the LAST complete block: Claude sometimes echoes the example
+    # block from the prompt before emitting the real one at the end, and
+    # concatenating multiple blocks makes every field a multiline value.
+    # One pass over both marker styles (RALPH_STATUS from the prompt
+    # templates, WALPH_STATUS legacy) so the genuinely last block wins
+    # regardless of which markers it uses.
     local block
-    block=$(echo "$output" | sed -n '/RALPH_STATUS$/,/RALPH_STATUS_END/p' 2>/dev/null)
-    if [[ -z "$block" ]]; then
-        block=$(echo "$output" | sed -n '/WALPH_STATUS$/,/WALPH_STATUS_END/p' 2>/dev/null)
-    fi
+    block=$(printf '%s\n' "$output" | awk '
+        /(RALPH|WALPH)_STATUS$/ && !/(RALPH|WALPH)_STATUS_END$/ { buf = ""; capturing = 1 }
+        capturing { buf = buf $0 ORS }
+        /(RALPH|WALPH)_STATUS_END$/ { capturing = 0; last = buf }
+        END { printf "%s", last }')
     echo "$block"
 }
 
@@ -39,7 +44,15 @@ parse_status_field() {
     local block="$1"
     local field="$2"
 
-    echo "$block" | grep "^${field}:" | sed "s/^${field}:[[:space:]]*//" | tr -d '\r'
+    # awk (first match then keep reading), not grep|head: head closing the
+    # pipe early can SIGPIPE grep, and under pipefail that 141 aborts callers
+    echo "$block" | awk -v f="$field" '
+        index($0, f ":") == 1 && !found {
+            found = 1
+            line = substr($0, length(f) + 2)
+            sub(/^[[:space:]]*/, "", line)
+            print line
+        }' | tr -d '\r'
 }
 
 # Parse complete status into associative array (bash 4+)
@@ -124,6 +137,11 @@ get_status_summary() {
 check_rate_limit() {
     local output="$1"
 
+    # Only inspect the end of the output, where CLI/API errors actually land.
+    # Project content earlier in the output (e.g. Claude writing retry code
+    # that mentions rate_limit_error) must not trigger the interactive prompt.
+    output=$(echo "$output" | tail -20)
+
     # Match specific error patterns from the Claude CLI:
     #   - "rate_limit_error" (API error type)
     #   - "Error: 429" (HTTP status from CLI)
@@ -173,10 +191,14 @@ check_api_error() {
 extract_error_message() {
     local output="$1"
 
-    # Only search the last 20 lines of output where actual errors typically appear
-    # This avoids false positives from Claude's explanations, code examples, or logs
+    # Strip the status block first: it is the last thing Claude prints, and a
+    # task description like "current_task: Add error handling" would otherwise
+    # be harvested as an error and inflate the circuit breaker's same-error
+    # count on a healthy run. Then search only the last 20 remaining lines.
     local last_lines
-    last_lines=$(echo "$output" | tail -20)
+    last_lines=$(echo "$output" \
+        | sed '/RALPH_STATUS$/,/RALPH_STATUS_END/d; /WALPH_STATUS$/,/WALPH_STATUS_END/d' \
+        | tail -20)
 
     # Try to find common error patterns
     local error_line

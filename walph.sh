@@ -30,6 +30,7 @@ source "$SCRIPT_DIR/lib/walph_help.sh"
 
 MODE="build"
 MAX_ITERATIONS=""
+MAX_ITERATIONS_OVERRIDE=""
 MODEL_OVERRIDE=""
 TIMEOUT_OVERRIDE=""
 MONITOR_MODE=false
@@ -108,7 +109,7 @@ parse_args() {
                     show_help
                     exit 1
                 fi
-                MAX_ITERATIONS="$2"
+                MAX_ITERATIONS_OVERRIDE="$2"
                 shift 2
                 ;;
             --model)
@@ -407,6 +408,8 @@ create_docker_files() {
 # ============================================================================
 
 show_status() {
+    load_config  # resolve STATE_DIR et al. (idempotent; status can run standalone)
+
     echo "Walph Riggum Status"
     echo "==================="
     echo ""
@@ -416,20 +419,22 @@ show_status() {
         echo "Walph initialized: Yes"
 
         # Circuit breaker status
-        if [[ -f "$PROJECT_DIR/.walph/state/circuit_breaker.json" ]]; then
-            init_circuit_breaker "$PROJECT_DIR/.walph/state"
+        if [[ -f "$PROJECT_DIR/$STATE_DIR/circuit_breaker.json" ]]; then
+            init_circuit_breaker "$PROJECT_DIR/$STATE_DIR"
             echo "Circuit breaker: $(get_circuit_breaker_status)"
         fi
 
         # Check for implementation plan
         if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]]; then
             echo "Implementation plan: Found"
-            # Count tasks (lines starting with - [ ])
+            # Count tasks (lines starting with - [ ]). `|| true`, not
+            # `|| echo 0`: grep -c prints its own 0 and exits 1 on zero
+            # matches, so the fallback echo would append a second line
             local total_tasks
-            total_tasks=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || echo "0")
+            total_tasks=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || true)
             local completed_tasks
-            completed_tasks=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || echo "0")
-            echo "Tasks: $completed_tasks completed, $total_tasks remaining"
+            completed_tasks=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || true)
+            echo "Tasks: ${completed_tasks:-0} completed, ${total_tasks:-0} remaining"
         else
             echo "Implementation plan: Not found (run 'walph plan' first)"
         fi
@@ -439,15 +444,16 @@ show_status() {
 }
 
 reset_state() {
+    load_config  # resolve STATE_DIR (reset can run standalone)
     log_info "Resetting Walph state..."
 
-    if [[ -d "$PROJECT_DIR/.walph/state" ]]; then
-        rm -f "$PROJECT_DIR/.walph/state/"*.json
-        rm -f "$PROJECT_DIR/.walph/state/last_iteration_note"
-        rm -f "$PROJECT_DIR/.walph/state/completion_signal"
-        rm -f "$PROJECT_DIR/.walph/state/stuck_signal"
-        rm -f "$PROJECT_DIR/.walph/state/unverified_tasks"
-        rm -f "$PROJECT_DIR/.walph/state/recovery_tasks"
+    if [[ -d "$PROJECT_DIR/$STATE_DIR" ]]; then
+        rm -f "$PROJECT_DIR/$STATE_DIR/"*.json
+        rm -f "$PROJECT_DIR/$STATE_DIR/last_iteration_note"
+        rm -f "$PROJECT_DIR/$STATE_DIR/completion_signal"
+        rm -f "$PROJECT_DIR/$STATE_DIR/stuck_signal"
+        rm -f "$PROJECT_DIR/$STATE_DIR/unverified_tasks"
+        rm -f "$PROJECT_DIR/$STATE_DIR/recovery_tasks"
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -764,8 +770,10 @@ run_iteration() {
 }
 
 main_loop() {
-    # Use shared main loop implementation from lib/runner.sh
-    run_main_loop ".walph" ".walph/state" "get_model_for_mode" "walph"
+    # Use shared main loop implementation from lib/runner.sh.
+    # $STATE_DIR (not a literal) — a configured STATE_DIR would otherwise
+    # write the completion signal where this loop never looks.
+    run_main_loop ".walph" "$STATE_DIR" "get_model_for_mode" "walph"
 }
 
 # ============================================================================
@@ -776,14 +784,11 @@ init_walph() {
     # Load configuration
     load_config
 
-    # Apply command line overrides
-    if [[ -n "$MAX_ITERATIONS" ]]; then
-        MAX_ITERATIONS="$MAX_ITERATIONS"
-    else
-        MAX_ITERATIONS="${DEFAULT_MAX_ITERATIONS}"
+    # Apply command line overrides AFTER load_config so they beat the config
+    # file and env vars (documented precedence: defaults < config < env < CLI)
+    if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
+        MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
     fi
-
-    # --timeout beats config file and WALPH_ITERATION_TIMEOUT (highest priority)
     if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
         ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
     fi
@@ -919,10 +924,20 @@ main() {
         main_loop || exit_code=$?
 
         # Verification files failing criteria as new plan tasks — surface them
+        # and exit nonzero: a run with failing criteria is not a success
         if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]] && has_unchecked_boxes "$PROJECT_DIR/IMPLEMENTATION_PLAN.md"; then
             echo ""
             log_warn "Verification added fix tasks to IMPLEMENTATION_PLAN.md — run 'walph build' again to address them"
+            exit_code=3
         fi
+    fi
+
+    # Distinguish "loop ended without completing" (max iterations, user exit)
+    # from genuine completion: exit 3 so callers like jeeroy --lfg can't
+    # mistake an exhausted run for a finished one
+    if [[ "$DRY_RUN" != "true" ]] && [[ $exit_code -eq 0 ]] \
+        && [[ "${LOOP_COMPLETED:-false}" != "true" ]]; then
+        exit_code=3
     fi
 
     # Summary

@@ -16,26 +16,37 @@
 
 set -euo pipefail
 
-# Track temp files for cleanup on exit
-RUNNER_TEMP_FILES=""
+# Track temp files for cleanup on exit (array: whitespace-safe paths)
+RUNNER_TEMP_FILES=()
 
 cleanup_runner_temp_files() {
-    if [[ -n "$RUNNER_TEMP_FILES" ]]; then
-        for f in $RUNNER_TEMP_FILES; do
-            rm -f "$f" 2>/dev/null
-        done
-        RUNNER_TEMP_FILES=""
+    if [[ ${#RUNNER_TEMP_FILES[@]} -gt 0 ]]; then
+        rm -f -- "${RUNNER_TEMP_FILES[@]}" 2>/dev/null || true
+        RUNNER_TEMP_FILES=()
     fi
 }
 
-trap cleanup_runner_temp_files EXIT INT TERM
+# On INT/TERM: kill the in-flight Claude child (it would otherwise keep
+# running autonomously), clean up, and actually exit — a bare cleanup trap
+# would let execution resume after the signal.
+_runner_on_signal() {
+    if [[ -n "${RUNNER_CLAUDE_PID:-}" ]]; then
+        kill "$RUNNER_CLAUDE_PID" 2>/dev/null || true
+    fi
+    cleanup_runner_temp_files
+    exit 130
+}
 
-# Create a tracked temp file
+trap cleanup_runner_temp_files EXIT
+trap _runner_on_signal INT TERM
+
+# Create a tracked temp file. Sets RUNNER_LAST_TEMP rather than echoing:
+# callers using $(make_runner_temp) would run it in a subshell, and the
+# registration in RUNNER_TEMP_FILES would never reach the parent (the EXIT
+# trap would then clean nothing).
 make_runner_temp() {
-    local tmp
-    tmp=$(mktemp)
-    RUNNER_TEMP_FILES="$RUNNER_TEMP_FILES $tmp"
-    echo "$tmp"
+    RUNNER_LAST_TEMP=$(mktemp)
+    RUNNER_TEMP_FILES+=("$RUNNER_LAST_TEMP")
 }
 
 # Build the {{LAST_ITERATION}} block: a short memory handoff so the fresh
@@ -197,14 +208,12 @@ run_shared_iteration() {
     local exit_code=0
 
     # Create temp files for prompt input and output capture
-    local temp_prompt
-    temp_prompt=$(make_runner_temp)
+    local temp_prompt temp_output temp_err
+    make_runner_temp; temp_prompt="$RUNNER_LAST_TEMP"
     printf '%s' "$full_prompt" > "$temp_prompt"
 
-    local temp_output
-    temp_output=$(make_runner_temp)
-    local temp_err
-    temp_err=$(make_runner_temp)
+    make_runner_temp; temp_output="$RUNNER_LAST_TEMP"
+    make_runner_temp; temp_err="$RUNNER_LAST_TEMP"
 
     # Build fast mode flag if enabled
     local fast_settings=""
@@ -243,6 +252,7 @@ run_shared_iteration() {
             > "$temp_output" 2>&1 &
     fi
     local claude_pid=$!
+    RUNNER_CLAUDE_PID="$claude_pid"  # for the INT/TERM handler
 
     # Watchdog: wait up to $timeout seconds for Claude to finish
     local elapsed=0
@@ -275,6 +285,7 @@ run_shared_iteration() {
         fi
     fi
 
+    RUNNER_CLAUDE_PID=""
     rm -f "$temp_prompt"
 
     # Capture output once and display it. In JSON mode, unwrap the result text

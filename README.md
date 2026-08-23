@@ -324,7 +324,7 @@ jeeroy ./client-docs --skip-qa --lfg
 | Plain text   | `.txt`                       | Direct read                  |
 | Word         | `.docx`, `.doc`              | Pandoc                       |
 | PowerPoint   | `.pptx`, `.ppt`              | Pandoc                       |
-| PDF          | `.pdf`                       | Pandoc / pdftotext           |
+| PDF          | `.pdf`                       | pdftotext (poppler)          |
 | HTML         | `.html`, `.htm`              | Pandoc                       |
 | Rich Text    | `.rtf`                       | Pandoc                       |
 | OpenDocument | `.odt`                       | Pandoc                       |
@@ -337,6 +337,7 @@ jeeroy ./client-docs --skip-qa --lfg
 
 - **Claude CLI** (required)
 - **pandoc** (required for non-markdown formats) - `brew install pandoc`
+- **pdftotext** (required for PDFs) - `brew install poppler`
 - **chrome-devtools MCP** (recommended for UI projects) - For browser-based UI testing
 
 ### Architecture Defaults

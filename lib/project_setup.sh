@@ -20,8 +20,11 @@ _load_template() {
         return 1
     fi
 
-    # Read and substitute {{PROJECT_NAME}}
-    sed "s/{{PROJECT_NAME}}/$project_name/g" "$template_file"
+    # Read and substitute {{PROJECT_NAME}} — substitute_placeholder, not sed:
+    # a project name with sed metacharacters would corrupt the replacement
+    local content
+    content=$(cat "$template_file")
+    printf '%s\n' "$(substitute_placeholder "$content" "{{PROJECT_NAME}}" "$project_name")"
 }
 
 # Generate AGENTS.md with support for basic and detailed modes
@@ -37,7 +40,8 @@ create_agents_md() {
     local template_dir
     template_dir="$(_get_template_dir)"
 
-    local build_cmd test_cmd lint_cmd structure notes
+    # Initialize all: an unset one (missing template file) is fatal under set -u
+    local build_cmd="" test_cmd="" lint_cmd="" structure="" notes=""
 
     # Load stack-specific commands from template file
     local stack_file="$template_dir/stacks/${stack}.txt"

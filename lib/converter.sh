@@ -84,13 +84,39 @@ check_unzip() {
 }
 
 # ============================================================================
+# ZIP TEMP-DIR CLEANUP
+# ============================================================================
+
+# Extraction dirs registered for cleanup at (sub)shell exit. rm -rf on an
+# already-removed dir is harmless, so the happy path's explicit rm is fine.
+_CONVERTER_ZIP_DIRS=()
+
+_converter_cleanup_zip_dirs() {
+    if [[ "${#_CONVERTER_ZIP_DIRS[@]}" -gt 0 ]]; then
+        rm -rf -- "${_CONVERTER_ZIP_DIRS[@]}" 2>/dev/null || true
+        _CONVERTER_ZIP_DIRS=()
+    fi
+}
+
+# ============================================================================
 # FORMAT DETECTION
 # ============================================================================
 
-# Get the file extension (lowercase, portable across bash 3.2+)
+# Get the file extension (lowercase, portable across bash 3.2+).
+# Works on the basename: "${file##*.}" on a dotless filename would return the
+# whole path (so /docs/Dockerfile could never match the dockerfile entry, and
+# /Users/j.doe/README would yield "doe/readme").
 get_extension() {
-    local file="$1"
-    local ext="${file##*.}"
+    local base
+    base=$(basename "$1")
+    local ext
+    if [[ "$base" == *.* ]]; then
+        ext="${base##*.}"
+    else
+        # No dot: use the whole name so extensionless entries in
+        # CODE_EXTENSIONS (dockerfile, makefile) can match
+        ext="$base"
+    fi
     echo "$ext" | tr '[:upper:]' '[:lower:]'
 }
 
@@ -204,21 +230,15 @@ convert_file() {
         return 0
     fi
 
-    # PDF handling (pandoc first, pdftotext fallback)
+    # PDF handling: pdftotext is the ONLY converter — pandoc can write PDFs
+    # but has no PDF *reader*, so `pandoc -f pdf` fails on every file
     if extension_in_list "$ext" "${PDF_EXTENSIONS[@]}"; then
-        if command -v pandoc &>/dev/null; then
-            if pandoc -f pdf -t markdown --wrap=none "$file" 2>/dev/null; then
-                return 0
-            fi
-            log_debug "pandoc failed for $filename, trying pdftotext..." >&2
-        fi
-
         if check_pdftotext; then
             pdftotext -layout "$file" - 2>/dev/null
             return $?
         fi
 
-        log_warn "Cannot convert PDF: $filename (install pandoc or pdftotext)" >&2
+        log_warn "Cannot convert PDF: $filename (install pdftotext: brew install poppler)" >&2
         printf '%s\n' "[PDF file: $filename - could not be converted]"
         return 1
     fi
@@ -252,14 +272,30 @@ convert_file() {
             return 1
         fi
 
+        # Depth cap: a zip-inside-zip chain (or a zip quine) would otherwise
+        # recurse without bound. Docs piles are untrusted input.
+        local depth="${_CONVERTER_ZIP_DEPTH:-0}"
+        if [[ "$depth" -ge 3 ]]; then
+            log_warn "Nested archive too deep, skipping: $filename" >&2
+            printf '[Archive: %s - nested too deeply, skipped]\n' "$filename"
+            return 1
+        fi
+
         local temp_dir
         temp_dir=$(mktemp -d)
-        # Track temp dir for cleanup (append to global list)
-        _CONVERTER_TEMP_DIRS="${_CONVERTER_TEMP_DIRS:-} $temp_dir"
+        # This runs inside $(...) command substitution, so a trap in the
+        # parent can't see our registration — clean up on subshell exit via
+        # a global array (a trap referencing the local would hit set -u when
+        # the local expires; each nesting level is its own subshell)
+        _CONVERTER_ZIP_DIRS+=("$temp_dir")
+        trap '_converter_cleanup_zip_dirs' EXIT
 
         if unzip -q -o "$file" -d "$temp_dir" 2>/dev/null; then
+            # Drop symlinks: a malicious archive can use them to write or
+            # read outside the extraction dir (zip-slip via symlink)
+            find "$temp_dir" -type l -delete 2>/dev/null || true
             log_debug "Extracted $filename to temp dir" >&2
-            convert_directory "$temp_dir" "true"
+            _CONVERTER_ZIP_DEPTH=$((depth + 1)) convert_directory "$temp_dir" "true"
             local rc=$?
             rm -rf "$temp_dir"
             return $rc
@@ -385,8 +421,10 @@ get_conversion_summary() {
     local other_count=0
     local unsupported_count=0
 
-    for file in "$dir"/*; do
-        [[ -f "$file" ]] || continue
+    # find (not a glob): must agree with convert_directory, which includes
+    # dotfiles — a glob would undercount what actually gets converted
+    local file
+    while IFS= read -r -d '' file; do
         local ext
         ext=$(get_extension "$file")
 
@@ -412,7 +450,7 @@ get_conversion_summary() {
         else
             unsupported_count=$((unsupported_count + 1))
         fi
-    done
+    done < <(find "$dir" -maxdepth 1 -type f -print0 2>/dev/null)
 
     echo "Files found:"
     if [[ $md_count -gt 0 ]]; then echo "  Markdown: $md_count"; fi
