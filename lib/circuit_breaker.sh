@@ -168,7 +168,9 @@ update_circuit_breaker() {
         no_change_count=0
         log_debug "File changes detected, reset no_change_count"
     else
-        ((no_change_count++))
+        # $((x + 1)) not ((x++)): post-increment from 0 returns status 1,
+        # which is fatal under set -e on bash >= 4.1
+        no_change_count=$((no_change_count + 1))
         log_debug "No file changes, no_change_count=$no_change_count"
     fi
     _update_state "no_change_count" "$no_change_count" "true"
@@ -176,7 +178,7 @@ update_circuit_breaker() {
     # Check error patterns
     if [[ -n "$error_output" ]]; then
         if check_error_pattern "$error_output"; then
-            ((same_error_count++))
+            same_error_count=$((same_error_count + 1))
             log_debug "Same error repeated, same_error_count=$same_error_count"
         else
             same_error_count=1
@@ -196,7 +198,7 @@ update_circuit_breaker() {
         _update_state "last_git_hash" "$current_hash"
         log_debug "New commit detected, reset no_commit_count"
     else
-        ((no_commit_count++))
+        no_commit_count=$((no_commit_count + 1))
         log_debug "No new commit, no_commit_count=$no_commit_count"
     fi
     _update_state "no_commit_count" "$no_commit_count" "true"

@@ -379,6 +379,9 @@ reset_gb_state() {
     if [[ -d "$PROJECT_DIR/$GB_STATE_DIR" ]]; then
         rm -f "$PROJECT_DIR/$GB_STATE_DIR/"*.json
         rm -f "$PROJECT_DIR/$GB_STATE_DIR/last_iteration_note"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/completion_signal"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/stuck_signal"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/unverified_tasks"
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -655,8 +658,10 @@ main() {
     init_goodbunny
 
     # Run main loop
-    main_loop
-    local exit_code=$?
+    # || capture keeps set -e from aborting before the summary on a
+    # nonzero loop result (circuit breaker, stuck signal)
+    local exit_code=0
+    main_loop || exit_code=$?
 
     # Summary
     echo ""

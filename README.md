@@ -163,6 +163,8 @@ walph plan                      # Generate tasks from specs (lints specs first)
 walph build                     # Implement tasks (the main loop)
 walph verify                    # Check implementation against spec acceptance
                                 #   criteria (auto-runs after a completed build)
+walph recover                   # Review tasks left unverified by timed-out
+                                #   iterations, then rebuild only those
 walph status                    # Show progress
 walph reset                     # Clear stuck state
 ```
@@ -172,6 +174,7 @@ walph reset                     # Clear stuck state
 ```
 --max-iterations N    Limit iterations (default: 50)
 --model <name>        Override model (opus, sonnet)
+--timeout SECONDS     Per-iteration timeout (default: 900)
 --monitor             Tmux split with logs + git status
 --dry-run             Show what would run
 ```
@@ -206,14 +209,16 @@ Include: specific endpoints, input/output examples, error cases, files to create
 ### .walph/config
 
 ```bash
+# Values are parsed literally: no quotes, no inline comments
 MAX_ITERATIONS=50
-MODEL_PLAN="opus"
-MODEL_BUILD="sonnet"
-MODEL_VERIFY="opus"
+MODEL_PLAN=opus
+MODEL_BUILD=sonnet
+MODEL_VERIFY=opus
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
 CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
-ITERATION_TIMEOUT=900  # 15 minutes; kills Claude if it hangs
+# Per-iteration timeout in seconds; kills Claude if it hangs
+ITERATION_TIMEOUT=900
 ```
 
 ### Environment Variables
@@ -260,6 +265,16 @@ Reset with `walph reset`, then check your specs for clarity.
 
 ### Rate limit hit
 Walph will prompt you: wait, exit, or continue. Usually best to wait.
+
+### Iterations keep timing out
+Some tasks legitimately need more than the default 15 minutes. Raise the limit
+with `walph build --timeout 1800` (or `ITERATION_TIMEOUT` in `.walph/config`).
+
+When an iteration is killed by the timeout, Walph records any tasks it checked
+off as *unverified* and tells the next iteration to reconcile the working tree.
+After a run with timeouts, run `walph recover` to review those tasks and
+rebuild only them — each one is re-verified against its "Done when" criterion
+before being trusted.
 
 ## Jeeroy Lenkins - Document-to-Spec Converter
 

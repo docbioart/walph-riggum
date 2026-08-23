@@ -87,6 +87,29 @@ lint_specs() {
 # unchecked checkboxes (- [ ]). Used as a ground-truth gate so a hallucinated
 # EXIT_SIGNAL from Claude can't end the loop while work remains on disk.
 # Returns 0 if unchecked boxes exist, 1 if none.
+# Check whether any recovery task (one plain task text per line in $2) is
+# still unchecked in the plan file $1. Used by 'walph recover' so completion
+# is gated on the recovery tasks only, not the whole plan.
+# Returns 0 if any recovery task remains unchecked, 1 if none.
+has_unchecked_recovery_tasks() {
+    local plan_file="$1"
+    local tasks_file="$2"
+    [[ -f "$plan_file" && -f "$tasks_file" ]] || return 1
+
+    # Whole-line matching (modulo indentation) — substring matching could
+    # confuse a task with another that contains its text
+    local stripped_plan
+    stripped_plan=$(sed -E 's/^[[:space:]]+//' "$plan_file")
+    local task
+    while IFS= read -r task || [[ -n "$task" ]]; do
+        [[ -n "$task" ]] || continue
+        if grep -qFx -- "- [ ] $task" <<< "$stripped_plan"; then
+            return 0
+        fi
+    done < "$tasks_file"
+    return 1
+}
+
 has_unchecked_boxes() {
     local target="$1"
 

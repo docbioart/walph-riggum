@@ -78,6 +78,7 @@ _write_last_iteration_note() {
     local status_summary="$3"
     local error_msg="$4"
     local timed_out="$5"
+    local extra_detail="${6:-}"
 
     local note_file="$PROJECT_DIR/$state_dir/last_iteration_note"
     {
@@ -88,6 +89,9 @@ _write_last_iteration_note() {
         fi
         if [[ "$timed_out" == "true" ]]; then
             echo "It hit the iteration timeout and was killed — its work may be half-finished and uncommitted. Reconcile the working tree first, and keep your task small."
+        fi
+        if [[ -n "$extra_detail" ]]; then
+            echo "$extra_detail"
         fi
     } > "$note_file" 2>/dev/null || true
 }
@@ -181,6 +185,14 @@ run_shared_iteration() {
     local timeout="${ITERATION_TIMEOUT:-900}"
     log_info "Running Claude ($model)... (timeout: ${timeout}s)"
 
+    # Snapshot the plan's checked-off tasks so that if this iteration is
+    # killed by the timeout, any boxes it checked can be flagged as
+    # unverified for the next iteration to re-verify.
+    local pre_checked=""
+    if [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] && [[ -f "${COMPLETION_GROUND_TRUTH:-}" ]]; then
+        pre_checked=$(grep -E '^[[:space:]]*- \[x\]' "$COMPLETION_GROUND_TRUTH" 2>/dev/null || true)
+    fi
+
     local output
     local exit_code=0
 
@@ -237,11 +249,14 @@ run_shared_iteration() {
     while kill -0 "$claude_pid" 2>/dev/null; do
         if [[ $elapsed -ge $timeout ]]; then
             log_warn "Claude has been running for ${timeout}s — killing stuck process"
-            kill "$claude_pid" 2>/dev/null
+            # Guard every step: the process can die between checks, and under
+            # set -e an unguarded failing kill/wait aborts the whole script
+            # mid-recovery (losing the handoff note and the rest of the loop)
+            kill "$claude_pid" 2>/dev/null || true
             # Give it a moment to die, then force-kill
             sleep 2
-            kill -9 "$claude_pid" 2>/dev/null
-            wait "$claude_pid" 2>/dev/null
+            kill -9 "$claude_pid" 2>/dev/null || true
+            wait "$claude_pid" 2>/dev/null || true
             exit_code=124  # Same exit code as GNU timeout
             break
         fi
@@ -249,10 +264,15 @@ run_shared_iteration() {
         elapsed=$((elapsed + 5))
     done
 
-    # If it exited on its own, collect the real exit code
+    # If it exited on its own, collect the real exit code.
+    # The || capture keeps set -e from killing the script when Claude exits
+    # nonzero — a failed iteration must be handled, not fatal.
     if [[ $exit_code -ne 124 ]]; then
-        wait "$claude_pid"
-        exit_code=$?
+        if wait "$claude_pid"; then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
     fi
 
     rm -f "$temp_prompt"
@@ -291,7 +311,7 @@ run_shared_iteration() {
     if [[ $exit_code -eq 124 ]]; then
         log_error "Iteration timed out after ${timeout}s"
         log_info "Claude may have stalled on an API call or long-running task"
-        log_info "The next iteration will retry. Adjust ITERATION_TIMEOUT in config if needed."
+        log_info "The next iteration will retry. Raise the limit with --timeout SECONDS (or ITERATION_TIMEOUT in config)."
     fi
 
     # Log the output
@@ -299,8 +319,8 @@ run_shared_iteration() {
 
     # Check for rate limit
     if check_rate_limit "$output"; then
-        handle_rate_limit "$output"
-        local rate_limit_choice=$?
+        local rate_limit_choice=0
+        handle_rate_limit "$output" || rate_limit_choice=$?
         if [[ $rate_limit_choice -eq 2 ]]; then
             return 2  # Exit signal
         fi
@@ -321,15 +341,46 @@ run_shared_iteration() {
     status_summary=$(get_status_summary "$output")
     log_info "Status: $status_summary"
 
-    # Update circuit breaker
+    # Update circuit breaker. A nonzero return means Claude signaled it is
+    # stuck — persist that so run_main_loop stops, instead of letting set -e
+    # abort here with the handoff note unwritten.
     local error_msg
     error_msg=$(extract_error_message "$output")
-    update_circuit_breaker "$output" "$error_msg"
+    if ! update_circuit_breaker "$output" "$error_msg"; then
+        touch "$PROJECT_DIR/$state_dir/stuck_signal"
+    fi
 
     # Leave a short handoff note for the next (fresh-context) iteration
     local timed_out=false
     [[ $exit_code -eq 124 ]] && timed_out=true
-    _write_last_iteration_note "$state_dir" "$iteration" "$status_summary" "$error_msg" "$timed_out"
+
+    # A killed iteration may have checked off tasks it never finished, and
+    # usually leaves uncommitted work. Give the next iteration the specifics
+    # so it verifies that work instead of trusting or discarding it.
+    local timeout_detail=""
+    if [[ "$timed_out" == "true" ]]; then
+        if [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] && [[ -f "${COMPLETION_GROUND_TRUTH:-}" ]]; then
+            local post_checked newly_checked
+            post_checked=$(grep -E '^[[:space:]]*- \[x\]' "$COMPLETION_GROUND_TRUTH" 2>/dev/null || true)
+            newly_checked=$(comm -13 <(printf '%s\n' "$pre_checked" | sort) <(printf '%s\n' "$post_checked" | sort) 2>/dev/null || true)
+            if [[ -n "$newly_checked" ]]; then
+                timeout_detail+="Tasks checked off DURING the killed iteration — treat as UNVERIFIED. Re-run each one's 'Done when' criterion; uncheck any that fail before starting new work:"$'\n'"$newly_checked"$'\n'
+                # Persist for 'walph recover': plain task text, deduplicated,
+                # accumulated across timeouts until recovered or completed
+                local rec_file="$PROJECT_DIR/$state_dir/unverified_tasks"
+                {
+                    [[ -f "$rec_file" ]] && cat "$rec_file"
+                    printf '%s\n' "$newly_checked" | sed -E 's/^[[:space:]]*- \[x\] //'
+                } | awk 'NF && !seen[$0]++' > "${rec_file}.tmp" && mv "${rec_file}.tmp" "$rec_file"
+            fi
+        fi
+        local dirty_files
+        dirty_files=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -10 || true)
+        if [[ -n "$dirty_files" ]]; then
+            timeout_detail+="Uncommitted changes left in the working tree:"$'\n'"$dirty_files"
+        fi
+    fi
+    _write_last_iteration_note "$state_dir" "$iteration" "$status_summary" "$error_msg" "$timed_out" "$timeout_detail"
 
     # Record cost/duration/outcome for this iteration
     local duration=$(( $(date +%s) - iteration_start_ts ))
@@ -344,11 +395,22 @@ run_shared_iteration() {
     # ground-truth file/dir is configured (e.g., IMPLEMENTATION_PLAN.md in
     # build mode), verify the checkboxes on disk agree before ending the loop.
     if check_completion "$output"; then
-        if [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] \
+        local completion_blocked=false
+        if [[ -n "${WALPH_RECOVERY_TASKS_FILE:-}" ]]; then
+            # Recovery run: only the recovery tasks gate completion — the
+            # rest of the plan is deliberately out of scope
+            if declare -f has_unchecked_recovery_tasks > /dev/null 2>&1 \
+                && has_unchecked_recovery_tasks "${COMPLETION_GROUND_TRUTH:-$PROJECT_DIR/IMPLEMENTATION_PLAN.md}" "$WALPH_RECOVERY_TASKS_FILE"; then
+                completion_blocked=true
+                log_warn "Claude signaled completion, but recovery tasks remain unchecked — ignoring the exit signal and continuing"
+            fi
+        elif [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] \
             && declare -f has_unchecked_boxes > /dev/null 2>&1 \
             && has_unchecked_boxes "$COMPLETION_GROUND_TRUTH"; then
+            completion_blocked=true
             log_warn "Claude signaled completion, but unchecked items remain in ${COMPLETION_GROUND_TRUTH#"$PROJECT_DIR"/} — ignoring the exit signal and continuing"
-        else
+        fi
+        if [[ "$completion_blocked" != "true" ]]; then
             log_success "Completion signal received!"
             # Write signal file so main_loop breaks after this iteration
             touch "$PROJECT_DIR/$state_dir/completion_signal"
@@ -356,7 +418,13 @@ run_shared_iteration() {
         fi
     fi
 
-    return "$exit_code"
+    # Normalize to 0/1. Claude's raw exit code must not leak out: return
+    # code 2 is reserved for the rate-limit handler's "exit and resume"
+    # choice, and Claude itself exits 2 on usage errors.
+    if [[ $exit_code -eq 0 ]]; then
+        return 0
+    fi
+    return 1
 }
 
 # Run the main autonomous loop
@@ -378,6 +446,11 @@ run_main_loop() {
 
     # Global flag: distinguishes "completed" from "hit max iterations" for callers
     LOOP_COMPLETED=false
+
+    # Clear stale signals a previous interrupted run may have left behind —
+    # a leftover completion_signal would end this run after one iteration,
+    # a leftover stuck_signal would abort it
+    rm -f "$PROJECT_DIR/$state_dir/completion_signal" "$PROJECT_DIR/$state_dir/stuck_signal"
 
     local iteration=1
 
@@ -411,11 +484,11 @@ run_main_loop() {
         # Export mode for circuit breaker (used by goodbunny)
         export TOOL_MODE="$MODE"
 
-        # Run iteration
+        # Run iteration. The || capture keeps set -e from aborting the loop
+        # on a failed iteration — failures are handled below, not fatal.
         WALPH_CURRENT_ITERATION="$iteration"
-        local result
-        run_iteration "$iteration" "$prompt_file" "$model"
-        result=$?
+        local result=0
+        run_iteration "$iteration" "$prompt_file" "$model" || result=$?
         if [[ $result -eq 0 ]]; then
             log_success "Iteration $iteration completed successfully"
         elif [[ $result -eq 2 ]]; then
@@ -423,6 +496,14 @@ run_main_loop() {
             return 0
         else
             log_warn "Iteration $iteration completed with issues"
+        fi
+
+        # Stop if the iteration recorded a stuck signal from Claude
+        if [[ -f "$PROJECT_DIR/$state_dir/stuck_signal" ]]; then
+            rm -f "$PROJECT_DIR/$state_dir/stuck_signal"
+            log_error "Claude signaled it is stuck — stopping loop"
+            log_info "Run '$tool_name reset' to clear state, then refine the specs/plan"
+            return 1
         fi
 
         # Check for completion signal file

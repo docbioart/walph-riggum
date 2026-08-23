@@ -60,6 +60,7 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
   walph build [options]         Build from implementation plan
     --max-iterations N          Limit iterations (default: 50)
     --model <name>              Override model (default: sonnet)
+    --timeout SECONDS           Per-iteration timeout (default: 900)
     --fast                      Enable Claude fast mode (2.5x faster, higher cost)
     --monitor                   Enable tmux monitoring view
 
@@ -67,6 +68,9 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
                                 criteria (auto-runs after a completed build)
     --max-iterations N          Limit iterations (default: 50)
     --model <name>              Override model (default: opus)
+
+  walph recover                 Review tasks left unverified by timed-out
+                                iterations, then rebuild ONLY those tasks
 
   walph status                  Show current progress
   walph reset                   Reset circuit breaker (if stuck)
@@ -169,12 +173,15 @@ COMMANDS:
     build             Run in building mode (implements from plan) [default]
                       (chains into verify automatically on completion)
     verify            Verify implementation against spec acceptance criteria
+    recover           Review tasks left unverified by timed-out iterations,
+                      then rebuild only those tasks
     status            Show current state and progress
     reset             Reset circuit breaker and state
 
 OPTIONS:
     --max-iterations N    Maximum iterations (default: 50)
     --model MODEL         Override model for this run
+    --timeout SECONDS     Per-iteration timeout in seconds (default: 900)
     --fast                Enable Claude fast mode (2.5x faster, higher cost)
     --monitor             Enable tmux monitoring view
     --dry-run             Show what would be run without executing
@@ -193,6 +200,8 @@ EXAMPLES:
     # Run Walph
     walph.sh plan                        # Generate implementation plan
     walph.sh build --max-iterations 10   # Build with limited iterations
+    walph.sh build --timeout 1800        # Allow 30 minutes per iteration
+    walph.sh recover                     # Rebuild tasks interrupted by timeouts
     walph.sh status                      # Check current progress
 
 WORKFLOW (new project):
