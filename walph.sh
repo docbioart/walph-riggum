@@ -452,8 +452,10 @@ reset_state() {
         rm -f "$PROJECT_DIR/$STATE_DIR/last_iteration_note"
         rm -f "$PROJECT_DIR/$STATE_DIR/completion_signal"
         rm -f "$PROJECT_DIR/$STATE_DIR/stuck_signal"
-        rm -f "$PROJECT_DIR/$STATE_DIR/unverified_tasks"
         rm -f "$PROJECT_DIR/$STATE_DIR/recovery_tasks"
+        # Deliberately KEEP unverified_tasks: reset clears the breaker, but
+        # the record of timeout-interrupted tasks is still needed by
+        # 'walph recover' (it is cleared when a loop completes)
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -745,6 +747,11 @@ prepare_recovery() {
     # an interrupted recovery must remain recoverable. It is cleared in
     # main() when LOOP_COMPLETED is true.
     log_info "Unchecked $recovered_count task(s) — rebuilding only those"
+
+    # A recovery run is a fresh start: clear a tripped circuit breaker
+    # (typically the very trip that stranded these tasks) so the loop
+    # actually runs instead of stopping at iteration 0
+    reset_circuit_breaker
 
     # Reuse the build machinery, with completion gated on the recovery tasks
     MODE="build"

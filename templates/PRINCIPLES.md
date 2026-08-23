@@ -2,6 +2,15 @@
      Edit this file once; every mode (plan, build, verify, audit, jeeroy) picks it up.
      Projects can override with their own copy in .walph/PRINCIPLES.md -->
 
+### One-Shot Session (Critical)
+
+**Your session ENDS the moment you stop responding. Nothing survives it.**
+
+- **NEVER end your turn to "wait" for anything** — a background test run, a container starting, a watcher, a long build. The instant you stop, those processes are killed and a fresh session starts with no memory of them. "I'll wait for the pytest run to finish and follow up" is an infinite loop that burns money: the next session will start the same run and wait again.
+- **Run everything to completion in the foreground, inside your turn.** If tests are slow (containers, migrations), start them and block on them. Long waits inside your turn are fine — the loop has a generous timeout.
+- **If something genuinely cannot finish within your turn**, do not pretend to wait: pick a smaller verifiable slice, commit what is truly done, and describe the remaining work precisely in the plan so the next session can continue.
+- **Always finish your turn with a commit for completed work and the status block** — a turn that ends without either is a wasted iteration and pushes the loop toward its circuit breaker.
+
 ### Code Quality
 
 - **DRY (Don't Repeat Yourself)** - Before writing new code, check if similar logic exists. Extract shared code into reusable functions/modules. Never copy-paste code blocks.
