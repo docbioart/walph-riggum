@@ -663,6 +663,11 @@ main() {
 
     init_goodbunny
 
+    # One loop per project (see lib/utils.sh acquire_run_lock). The EXIT
+    # trap must keep the runner's temp-file cleanup.
+    acquire_run_lock "$PROJECT_DIR/$GB_STATE_DIR/goodbunny.lock" "goodbunny"
+    trap 'release_run_lock; cleanup_runner_temp_files' EXIT
+
     # Run main loop
     # || capture keeps set -e from aborting before the summary on a
     # nonzero loop result (circuit breaker, stuck signal)

@@ -105,6 +105,44 @@ check_chrome_mcp() {
 }
 
 # ============================================================================
+# RUN LOCK
+# ============================================================================
+
+# Refuse to start a second autonomous loop against the same project — two
+# loops mutating one working tree commit torn mixes of each other's edits
+# (observed live on 2026-08-24: three concurrent walph runs during a network
+# outage). noclobber write is the atomic claim; a dead PID means stale lock.
+#
+# Usage: acquire_run_lock <lock_file> <tool_name>
+# Sets RUN_LOCK_FILE on success (caller's EXIT trap must rm it); exits 1 if
+# another live run holds the lock.
+acquire_run_lock() {
+    local lock_file="$1"
+    local tool_name="${2:-walph}"
+
+    if ! ( set -o noclobber; echo "$$" > "$lock_file" ) 2>/dev/null; then
+        local lock_pid
+        lock_pid=$(cat "$lock_file" 2>/dev/null || true)
+        if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+            log_error "Another $tool_name run (PID $lock_pid) is already active in this project"
+            log_info "Two loops mutating one working tree corrupt each other's commits."
+            log_info "Wait for it to finish, or stop it first with: kill $lock_pid"
+            exit 1
+        fi
+        log_warn "Removing stale $tool_name lock (PID ${lock_pid:-unknown} is gone)"
+        echo "$$" > "$lock_file"
+    fi
+    RUN_LOCK_FILE="$lock_file"
+}
+
+release_run_lock() {
+    if [[ -n "${RUN_LOCK_FILE:-}" ]]; then
+        rm -f "$RUN_LOCK_FILE" 2>/dev/null || true
+        RUN_LOCK_FILE=""
+    fi
+}
+
+# ============================================================================
 # FILE UTILITIES
 # ============================================================================
 

@@ -876,6 +876,12 @@ main() {
 
     init_walph
 
+    # One loop per project: a second concurrent run would mutate the same
+    # working tree and shared state. The EXIT trap must keep the runner's
+    # temp-file cleanup — setting a new EXIT trap replaces the old one.
+    acquire_run_lock "$PROJECT_DIR/$STATE_DIR/walph.lock" "walph"
+    trap 'release_run_lock; cleanup_runner_temp_files' EXIT
+
     # Timeout recovery: review tasks interrupted by killed iterations, then
     # rebuild only those (prepare_recovery exits if there is nothing to do)
     if [[ "$MODE" == "recover" ]]; then
