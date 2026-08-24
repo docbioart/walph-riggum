@@ -60,11 +60,12 @@ _working_tree_sig() {
     {
         git status --porcelain 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' || true
         git diff 2>/dev/null || true
+        # --stdin-paths: ONE git process for all untracked files. The
+        # per-file loop this replaces forked git once per file and wedged
+        # startup for hours when an iteration dumped 177k scratch artifacts.
         git ls-files --others --exclude-standard 2>/dev/null \
             | grep -v '\.walph/state/\|\.goodbunny/state/' \
-            | while IFS= read -r f; do
-                [[ -f "$f" ]] && git hash-object "$f" 2>/dev/null
-              done || true
+            | git hash-object --stdin-paths 2>/dev/null || true
     } | git hash-object --stdin 2>/dev/null || echo "no-git"
 }
 
