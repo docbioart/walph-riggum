@@ -289,33 +289,39 @@ run_shared_iteration() {
     RUNNER_CLAUDE_PID=""
     rm -f "$temp_prompt"
 
-    # Capture output once and display it. In JSON mode, unwrap the result text
+    # Capture output and display it. In JSON mode, unwrap the result text
     # and cost; fall back to raw output if the JSON is unparseable (e.g., the
     # process was killed mid-write).
+    #
+    # CAP what enters shell variables: a long iteration (docker builds, test
+    # suites) can emit hundreds of MB, and every "$output" pass then costs
+    # minutes of pure bash CPU — a killed E2E iteration once wedged the loop
+    # for an hour here. All parsing targets (status block, errors, rate
+    # limits) live at the END of the output, so the tail is sufficient. jq
+    # reads from the file, never through a variable.
+    local output_cap="${WALPH_OUTPUT_CAP:-200000}"
     local cost_usd=""
-    local raw_stdout
-    raw_stdout=$(cat "$temp_output")
-    rm -f "$temp_output"
 
     if [[ "$json_mode" == "true" ]]; then
         local raw_stderr
-        raw_stderr=$(cat "$temp_err")
-        if [[ -n "$raw_stdout" ]] && jq -e . >/dev/null 2>&1 <<< "$raw_stdout"; then
-            output=$(jq -r '.result // empty' <<< "$raw_stdout")
-            cost_usd=$(jq -r '.total_cost_usd // empty' <<< "$raw_stdout")
+        raw_stderr=$(tail -c "$output_cap" "$temp_err" 2>/dev/null || true)
+        if [[ -s "$temp_output" ]] && jq -e . "$temp_output" >/dev/null 2>&1; then
+            cost_usd=$(jq -r '.total_cost_usd // empty' "$temp_output")
+            output=$(jq -r '.result // empty' "$temp_output" | tail -c "$output_cap")
             if [[ -z "$output" ]]; then
-                output="$raw_stdout"
+                output=$(tail -c "$output_cap" "$temp_output")
             fi
         else
-            output="$raw_stdout"
+            output=$(tail -c "$output_cap" "$temp_output" 2>/dev/null || true)
         fi
         # Keep stderr visible to error/rate-limit detection, as 2>&1 used to
         if [[ -n "$raw_stderr" ]]; then
             output="$output"$'\n'"$raw_stderr"
         fi
     else
-        output="$raw_stdout"
+        output=$(tail -c "$output_cap" "$temp_output" 2>/dev/null || true)
     fi
+    rm -f "$temp_output"
     rm -f "$temp_err"
     echo "$output"
 
