@@ -272,13 +272,48 @@ ask_choice() {
 
 # Handle rate limit with user interaction
 # Args: [claude_output] - optional raw output from Claude for detail extraction
+# Seconds until the reset time a Claude Code cap message names ("resets 1pm",
+# "Your limit will reset at 3:30pm"), plus a two-minute grace; empty when the output
+# names no parseable time. Pure-bash clock arithmetic (no GNU/BSD `date -d` split):
+# today's midnight = now minus the H/M/S read from `date`, target = that + the
+# parsed clock time, rolled to tomorrow when already past. Capped at 24h.
+rate_limit_reset_delay() {
+    local output="${1:-}"
+    local hint
+    hint=$(printf '%s\n' "$output" | grep -oiE "reset(s)?( at)? [0-9]{1,2}(:[0-9]{2})? ?(am|pm)" | head -1)
+    [[ -z "$hint" ]] && return 0
+    local clock ampm hour minute
+    clock=$(printf '%s' "$hint" | grep -oE "[0-9]{1,2}(:[0-9]{2})?")
+    ampm=$(printf '%s' "$hint" | grep -oiE "am|pm" | tr '[:upper:]' '[:lower:]')
+    hour=${clock%%:*}; minute=0
+    [[ "$clock" == *:* ]] && minute=${clock#*:}
+    hour=$((10#$hour)); minute=$((10#$minute))
+    [[ "$ampm" == "pm" && $hour -lt 12 ]] && hour=$((hour + 12))
+    [[ "$ampm" == "am" && $hour -eq 12 ]] && hour=0
+    local now midnight target
+    now=$(date +%s)
+    midnight=$(( now - (10#$(date +%H) * 3600 + 10#$(date +%M) * 60 + 10#$(date +%S)) ))
+    target=$(( midnight + hour * 3600 + minute * 60 ))
+    [[ $target -le $now ]] && target=$(( target + 86400 ))
+    local delay=$(( target - now + 120 ))
+    [[ $delay -gt 86400 ]] && delay=86400
+    printf '%s' "$delay"
+}
+
 handle_rate_limit() {
     local claude_output="${1:-}"
     local delay="${RATE_LIMIT_RETRY_DELAY:-60}"
 
     # Non-interactive session (nohup, CI, overnight run): nobody can answer
-    # the prompt, so wait and retry instead of dying on a failed read
+    # the prompt, so wait and retry instead of dying on a failed read. When the
+    # message names its reset time, sleep until then rather than polling every
+    # minute against a cap that will not lift for hours.
     if [[ ! -t 0 ]]; then
+        local until_reset
+        until_reset=$(rate_limit_reset_delay "$claude_output")
+        if [[ -n "$until_reset" && "$until_reset" -gt "$delay" ]]; then
+            delay="$until_reset"
+        fi
         log_warn "API rate limit detected — non-interactive session, waiting ${delay}s before retrying"
         sleep "$delay"
         return 0

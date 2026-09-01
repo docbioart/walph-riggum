@@ -160,6 +160,11 @@ check_rate_limit() {
     if echo "$output" | grep -qi "Your limit will reset at"; then
         return 0
     fi
+    #   - "You've hit your weekly limit · resets 1pm" (Claude Code weekly cap, 2026-08-31:
+    #     an overnight run burned three empty iterations into the breaker on this wording)
+    if echo "$output" | grep -qiE "hit your (weekly |usage |daily )?limit"; then
+        return 0
+    fi
     return 1  # Not rate limited
 }
 
