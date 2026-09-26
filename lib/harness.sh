@@ -455,7 +455,7 @@ _harness_parse_claude() {
     summary=$(jq -c '{
         last: (.result // ""),
         cost: (.total_cost_usd // null),
-        in: (.usage.input_tokens // null),
+        in: (if .usage then ((.usage.input_tokens // 0) + (.usage.cache_creation_input_tokens // 0) + (.usage.cache_read_input_tokens // 0)) else null end),
         out: (.usage.output_tokens // null),
         is_error: (.is_error // false),
         subtype: (.subtype // "")
@@ -576,6 +576,10 @@ _harness_parse_opencode() {
 
 # harness_parse_result <out_file> <err_file> [final_file]
 # Fills the HARNESS_* result globals from the files harness_exec wrote.
+# Token columns mean "all input the model saw" and "all output": Claude's
+# cache-creation/read tokens are added to its input count so the figure is
+# comparable with Codex (whose input_tokens already include cached input)
+# and OpenCode (summed over steps).
 harness_parse_result() {
     local out_file="$1" err_file="$2" final_file="${3:-}"
     _harness_reset_result

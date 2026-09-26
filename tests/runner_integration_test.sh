@@ -62,7 +62,7 @@ for h in claude codex opencode; do
     csv=$(ls "$p"/.walph/logs/*_summary.csv | head -1)
     expect_contains "build/$h: csv header" "$csv" "timestamp,iteration,mode,harness,model,duration_seconds,cost_usd,tokens_in,tokens_out,usage_complete,status"
     case "$h" in
-        claude)   expect_contains "build/claude: cost logged" "$csv" ",build,claude,sonnet,.*,0.0123,1000,200,true," ;;
+        claude)   expect_contains "build/claude: cost logged" "$csv" ",build,claude,sonnet,.*,0.0123,1500,200,true," ;;
         codex)    expect_contains "build/codex: tokens, no cost" "$csv" ",build,codex,gpt-5.6-sol,.*,,2000,300,true," ;;
         opencode) expect_contains "build/opencode: cost summed" "$csv" ",build,opencode,default,.*,0.003,330,70,true," ;;
     esac

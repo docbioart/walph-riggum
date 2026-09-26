@@ -41,7 +41,7 @@ HARNESS=claude
 harness_parse_result "$FIX/claude-ok.json" "$EMPTY" ""
 assert_eq "claude: text ok" true "$HARNESS_TEXT_OK"
 assert_eq "claude: cost" 0.0421 "$HARNESS_COST_USD"
-assert_eq "claude: tokens" "1200/340" "$HARNESS_TOKENS_IN/$HARNESS_TOKENS_OUT"
+assert_eq "claude: tokens include cache reads" "10200/340" "$HARNESS_TOKENS_IN/$HARNESS_TOKENS_OUT"
 assert_eq "claude: usage complete" true "$HARNESS_USAGE_COMPLETE"
 assert_eq "claude: no errors" "" "$HARNESS_ERRORS"
 assert_contains "claude: status summary" "$(get_status_summary "$HARNESS_TEXT")" "Completion: MEDIUM"

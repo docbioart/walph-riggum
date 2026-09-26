@@ -4,7 +4,11 @@
 set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 status=0
-for shell in /bin/bash "$(command -v bash)"; do
+other_bash=$(command -v bash)
+if [[ "$other_bash" == "/bin/bash" ]] || [[ "$(cd "$(dirname "$other_bash")" && pwd -P)/bash" == "/bin/bash" ]]; then
+    other_bash=""
+fi
+for shell in /bin/bash $other_bash; do
     [[ -x "$shell" ]] || continue
     echo "== $shell ($("$shell" --version | head -1))"
     for t in harness_parse_test.sh runner_integration_test.sh; do
