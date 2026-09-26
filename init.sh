@@ -131,11 +131,8 @@ create_implementation_plan() {
 
 ## Tasks
 
-<!-- Tasks will be listed here in checkbox format:
-- [ ] Task 1: Description
-- [ ] Task 2: Description
-- [x] Completed task
--->
+<!-- Tasks appear here one per line, as checkboxes: "[ ] Task 1: Description"
+     with a leading dash for open tasks, "[x]" once completed. -->
 
 ## Architecture Decisions
 

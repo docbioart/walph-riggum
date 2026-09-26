@@ -115,6 +115,17 @@ is_git_repo() {
     git rev-parse --git-dir &>/dev/null
 }
 
+# Warn once when the project is not a git repository: the circuit breaker's
+# no-change and no-commit detectors are disabled there
+warn_if_not_git_repo() {
+    if is_git_repo; then
+        return 0
+    fi
+    log_warn "Not a git repository: change and commit detection are disabled, so the loop only stops on repeated errors, a stuck signal, or the iteration limit"
+    log_info "Run 'git init' (or 'walph setup', which does it) to enable the full circuit breaker"
+    return 0
+}
+
 # Get project root (git root or current directory)
 get_project_root() {
     if is_git_repo; then

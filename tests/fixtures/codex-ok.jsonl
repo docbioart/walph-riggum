@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a0de3e-951b-7221-982d-dca75b202679"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  user (/Users/artmorales/.codex/config.toml): `projects./Users/artmorales/Marune-Orig.approval_policy` is ignored.\n  user (/Users/artmorales/.codex/config.toml): `projects./Users/artmorales/Marune-Orig.sandbox_mode` is ignored."}}
+{"type":"item.completed","item":{"id":"item_1","type":"error","message":"Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  user (/Users/artmorales/.codex/config.toml): `projects./Users/artmorales/Marune-Orig.approval_policy` is ignored.\n  user (/Users/artmorales/.codex/config.toml): `projects./Users/artmorales/Marune-Orig.sandbox_mode` is ignored."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":15283,"cached_input_tokens":12160,"cache_write_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0}}

@@ -21,7 +21,9 @@ Walph is spec-driven from start to finish. Your specs are the source of truth at
                  →  6. Loop back to BUILD if verify filed fix tasks
 ```
 
-Each iteration runs with fresh context. Memory lives in files: the plan's checkboxes, the specs' acceptance criteria, git commits, and a short handoff note passed from one iteration to the next. The loop only ends when the checkboxes on disk agree — Claude saying "done" isn't enough.
+Each iteration runs with fresh context. Memory lives in files: the plan's checkboxes, the specs' acceptance criteria, git commits, and a short handoff note passed from one iteration to the next. The loop only ends when the checkboxes on disk agree — the agent saying "done" isn't enough.
+
+The agent CLI is pluggable. Every command below runs on Claude Code by default; add `--harness codex` or `--harness opencode` to run the same step on Codex CLI or OpenCode.
 
 ## What Walph Needs to Run
 
@@ -240,6 +242,9 @@ npm run lint
 
 ```bash
 ../walph.sh plan --max-iterations 2
+
+# Same, on Codex (gpt-6-astra plans by default)
+../walph.sh plan --max-iterations 2 --harness codex
 ```
 
 Walph will:
@@ -263,12 +268,27 @@ This is the cheapest quality gate in the whole pipeline — 30 seconds here save
 
 Edit manually if needed before building.
 
+### Optional: Second-Model Review
+
+Have a different model critique the plan, then let the planner reconcile the findings:
+
+```bash
+../walph.sh plan --reviewer codex:gpt-6-astra     # review right after planning
+../walph.sh review-plan --reviewer claude:opus    # review an existing plan
+```
+
+The review lands in `PLAN_REVIEW.md` with a verdict and numbered findings; the reconciliation pass appends a `## Dispositions` section (each finding accepted with what changed, or rejected with why) and edits `IMPLEMENTATION_PLAN.md`. There is no default reviewer.
+
 ---
 
 ## Step 5: Run Building
 
 ```bash
 ../walph.sh build --max-iterations 20
+
+# Same, on Codex (gpt-5.6-sol builds by default) or OpenCode (your configured model)
+../walph.sh build --max-iterations 20 --harness codex
+../walph.sh build --max-iterations 20 --harness opencode
 ```
 
 Walph will loop, one task per fresh-context iteration:
@@ -281,7 +301,7 @@ Walph will loop, one task per fresh-context iteration:
 
 Each iteration also receives a short note about what the previous iteration did (and warnings if the loop is losing traction), so fresh contexts don't repeat mistakes.
 
-Claude reporting "all done" is not trusted on its own: the loop keeps going as long as `IMPLEMENTATION_PLAN.md` has unchecked tasks on disk.
+The agent reporting "all done" is not trusted on its own: the loop keeps going as long as `IMPLEMENTATION_PLAN.md` has unchecked tasks on disk, the process exited cleanly, and it produced a real final response.
 
 ### Monitor Progress
 
@@ -295,7 +315,7 @@ tail -f .walph/logs/walph_*.log
 # See git history
 git log --oneline
 
-# Per-iteration duration and API cost (requires jq)
+# Per-iteration harness, model, duration, cost, and tokens
 cat .walph/logs/walph_*_summary.csv
 ```
 
@@ -352,12 +372,13 @@ cat .walph/logs/walph_*.log | tail -100
 ```
 my-project/
 ├── .walph/
-│   ├── config              # Override defaults here (models, thresholds)
+│   ├── config              # Override defaults here (harness, models, thresholds)
 │   ├── logs/               # Session logs + per-iteration cost CSV
 │   ├── state/              # Circuit breaker state + iteration handoff note
 │   ├── PROMPT_plan.md      # Planning prompt (customizable)
 │   ├── PROMPT_build.md     # Building prompt (customizable)
 │   ├── PROMPT_verify.md    # Verification prompt (customizable)
+│   ├── PROMPT_plan_review.md  # Second-model plan review prompt
 │   └── PRINCIPLES.md       # Engineering rules injected into every prompt
 │                           #   (env-var config, Docker ports, FE/BE contracts,
 │                           #    UI testing) — edit to change the rules
@@ -385,6 +406,12 @@ walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 # Verify implementation against spec acceptance criteria
 ./walph.sh verify [--max-iterations N] [--model opus]
 
+# Second-model plan review (harness[:model]; no default)
+./walph.sh review-plan --reviewer codex:gpt-6-astra
+
+# Any plan/build/verify command: pick the agent CLI
+./walph.sh build --harness claude|codex|opencode
+
 # Check status
 ./walph.sh status
 
@@ -408,3 +435,4 @@ walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 7. **Watch the logs** - `tail -f .walph/logs/*.log`
 8. **Check the cost CSV** - `.walph/logs/*_summary.csv`. An expensive iteration usually means an under-specified task or spec.
 9. **Tune the rules** - `.walph/PRINCIPLES.md` holds the engineering rules every phase follows; edit it to match your team's conventions.
+10. **Mix models** - plan on one harness, review with another (`--reviewer`), build on a third if you like. Model names must fit their harness: `opus` is Claude-only, `gpt-6-astra` is Codex-only, OpenCode wants `provider/model`.

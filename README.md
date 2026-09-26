@@ -1,6 +1,6 @@
 # Walph Riggum
 
-An autonomous coding loop that runs Claude from the *outside* to build software projects with clean context every iteration.
+An autonomous coding loop that runs a coding agent from the *outside* to build software projects with clean context every iteration. It drives **Claude Code** by default and can run the same loop on **OpenAI Codex CLI** or **OpenCode** with `--harness`.
 
 Comes with **[Jeeroy Lenkins](#jeeroy-lenkins---document-to-spec-converter)**, a companion tool that turns any pile of docs (Word, PDF, PowerPoint, markdown, etc.) into Walph-ready specs and optionally kicks off the entire pipeline with a single `--lfg` flag. Docs in, working code out.
 
@@ -34,7 +34,7 @@ This is how humans work on large projects: do one thing, save your work, take a 
 | **Walph Riggum**             | Fresh each iteration | Files + Git     | One-shot via Jeeroy `--lfg` | Large projects, autonomy    |
 | **Good Bunny**               | Fresh each iteration | REVIEW_FINDINGS | N/A                         | Code quality, codebase docs |
 
-Walph is not a Claude Code plugin. It's an external orchestrator that *runs* Claude Code repeatedly, giving each invocation exactly what it needs and nothing more.
+Walph is not a Claude Code plugin. It's an external orchestrator that *runs* an agent CLI repeatedly, giving each invocation exactly what it needs and nothing more. The CLI is pluggable: Claude Code by default, Codex or OpenCode with `--harness` (see [Harnesses](#harnesses)).
 
 ## How It Works
 
@@ -74,7 +74,9 @@ Each build iteration is independent. Claude reads the current state from files, 
 
 ## Features
 
-- **Dual-model strategy**: Opus for planning and verification (smarter), Sonnet for building (faster)
+- **Dual-model strategy**: Opus for planning and verification (smarter), Sonnet for building (faster); on Codex, gpt-6-astra and gpt-5.6-sol
+- **Pluggable harness**: run the same loop on Claude Code (default), Codex CLI, or OpenCode with `--harness`
+- **Second-model plan review**: `walph plan --reviewer codex:gpt-6-astra` has a different model critique the plan, then the planner reconciles its findings (opt-in, no default)
 - **Spec-driven end to end**: specs are linted before planning, re-read during building, and their acceptance criteria are exercised during verification
 - **Circuit breaker**: Auto-stops if Claude gets stuck (no changes, same error, no commits)
 - **Ground-truth completion**: the loop only ends when the checkboxes on disk agree, not just when Claude says so
@@ -87,14 +89,12 @@ Each build iteration is independent. Claude reads the current state from files, 
 
 ## Requirements
 
-- **Claude CLI** (required) - The Claude Code command-line tool
+- **An agent CLI** (one required) - [Claude Code](https://docs.claude.com/claude-code) (`claude`, the default), [Codex CLI](https://developers.openai.com/codex) (`codex`), or [OpenCode](https://opencode.ai) (`opencode`)
 - **Git** (required) - For version control and commits
-- **chrome-devtools MCP** (recommended) - For UI testing. Without it, UI testing must be done manually.
-  ```bash
-  # Install via Claude MCP settings - see https://github.com/anthropics/anthropic-quickstarts
-  ```
+- **jq** (required) - Parses the agents' JSON output and tracks cost
+- **chrome-devtools MCP** (recommended) - For UI testing, configured in whichever agent CLI you use. Without it, UI testing must be done manually.
 
-> **Note:** Walph will warn if chrome-devtools MCP is not available but will continue. UI tasks will need manual verification.
+> **Note:** Walph will warn if chrome-devtools MCP is not configured for the selected harness but will continue. UI tasks will need manual verification.
 
 ## Quick Start
 
@@ -163,6 +163,7 @@ walph plan                      # Generate tasks from specs (lints specs first)
 walph build                     # Implement tasks (the main loop)
 walph verify                    # Check implementation against spec acceptance
                                 #   criteria (auto-runs after a completed build)
+walph review-plan --reviewer X  # Second model reviews the plan, planner reconciles
 walph status                    # Show progress
 walph reset                     # Clear stuck state
 ```
@@ -170,11 +171,54 @@ walph reset                     # Clear stuck state
 ### Options
 
 ```
+--harness <name>      Agent CLI to run: claude (default), codex, opencode
+--model <name>        Override model for this run (must fit the harness)
+--reviewer <spec>     Second-model plan review: <harness>[:<model>], e.g. codex:gpt-6-astra
 --max-iterations N    Limit iterations (default: 50)
---model <name>        Override model (opus, sonnet)
 --monitor             Tmux split with logs + git status
---dry-run             Show what would run
+--dry-run             Show what would run (prints the exact agent command)
 ```
+
+## Harnesses
+
+The loop is the same on every harness: prompt on stdin, one non-interactive run with permissions bypassed, JSON events parsed for the final response and usage, then the next fresh-context iteration.
+
+```bash
+walph build                              # Claude Code (default)
+walph build --harness codex              # Codex CLI
+walph build --harness opencode           # OpenCode
+export WALPH_HARNESS=codex               # or set HARNESS=codex in .walph/config
+```
+
+| | Claude Code | Codex CLI | OpenCode |
+|---|---|---|---|
+| Command | `claude -p` | `codex exec -` | `opencode run` |
+| Default models (plan / build / verify) | opus / sonnet / opus | gpt-6-astra / gpt-5.6-sol / gpt-6-astra | your `opencode.json` model |
+| Model override format | `--model opus` | `--model gpt-5.6-terra` | `--model provider/model` |
+| Full access (plan, build, verify, fix) | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` | `--auto` |
+| Restricted access (Jeeroy analysis, plan review) | no bypass flag: your own Claude permission settings apply | `--sandbox read-only` | `--auto` withheld plus `edit`/`bash`/`webfetch`/`task` denied via inline config |
+| Cost in the summary CSV | dollars | tokens only (Codex reports no price) | dollars when the provider prices the model, else 0 |
+| Reasoning effort (`REASONING_EFFORT`) | ignored | `model_reasoning_effort` | `--variant` |
+| `--fast` | supported | ignored with a warning | ignored with a warning |
+
+Model names are validated against the harness: a Claude alias like `opus` inherited from a config file on another harness falls back to that harness's default with a warning, while passing one explicitly with `--model` is an error.
+
+**What "restricted" means.** It is best effort, not a guarantee. Codex's read-only sandbox blocks file writes and most side effects. OpenCode's deny rules cover its built-in tools but not custom MCP servers a user has configured. Claude Code in restricted mode simply runs without the bypass flag, so whatever your permission settings already allow is allowed. Restricted runs are used where the agent only needs to read and answer.
+
+## Second-Model Plan Review
+
+A plan written by one model can be checked by another before anything is built. There is no default reviewer; it runs only when asked.
+
+```bash
+walph plan --reviewer codex:gpt-6-astra      # plan with the primary harness, then review
+walph review-plan --reviewer claude:opus     # review an existing plan
+export WALPH_PLAN_REVIEWER=codex             # or PLAN_REVIEWER=codex in .walph/config
+```
+
+1. **Review pass** - the reviewer harness/model reads the specs and the plan with restricted access and writes a verdict plus numbered findings to `PLAN_REVIEW.md`
+2. **Reconciliation pass** - the primary planner re-reads the plan with the findings injected, records a disposition for each one under `## Dispositions` in `PLAN_REVIEW.md` (accepted with what changed, or rejected with why), and edits `IMPLEMENTATION_PLAN.md` accordingly
+
+A malformed or failed review exits non-zero, and Jeeroy's `--lfg` will not start a build when a requested review did not complete. The result is reported as "reconciled", not "approved": the reviewer is not asked again.
 
 ## Writing Good Specs
 
@@ -206,25 +250,35 @@ Include: specific endpoints, input/output examples, error cases, files to create
 ### .walph/config
 
 ```bash
+HARNESS=claude                 # claude | codex | opencode
 MAX_ITERATIONS=50
-MODEL_PLAN="opus"
+MODEL_PLAN="opus"              # defaults depend on the harness; values may be quoted or bare
 MODEL_BUILD="sonnet"
 MODEL_VERIFY="opus"
+REASONING_EFFORT=high          # codex / opencode only
+PLAN_REVIEWER=codex:gpt-6-astra   # second-model plan review; no default
 CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
 CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
 CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
-ITERATION_TIMEOUT=900  # 15 minutes; kills Claude if it hangs
+ITERATION_TIMEOUT=900  # 15 minutes; kills the agent (and its child processes) if it hangs
 ```
+
+Precedence: command-line flags > environment variables > `.walph/config` > harness defaults.
 
 ### Environment Variables
 
 ```bash
+export WALPH_HARNESS=codex
 export WALPH_MAX_ITERATIONS=100
 export WALPH_MODEL_BUILD="opus"  # Use Opus for building too
 export WALPH_MODEL_VERIFY="opus"
+export WALPH_REASONING_EFFORT=high
+export WALPH_PLAN_REVIEWER=claude:opus
 export WALPH_ITERATION_TIMEOUT=1200  # 20 minutes per iteration
 export WALPH_SKIP_VERIFY=true    # Don't auto-run verify after build
 ```
+
+The per-session summary CSV in `.walph/logs/` records, per iteration, the harness, model, duration, cost (blank when the harness reports none), tokens in/out, and whether the agent's event stream completed.
 
 ## Circuit Breaker
 
@@ -299,7 +353,12 @@ jeeroy ./client-docs --project ./my-new-api --lfg
 
 # Skip questions, just generate best-effort specs
 jeeroy ./client-docs --skip-qa --lfg
+
+# Run everything on Codex, and have Claude Opus review the plan before building
+jeeroy ./client-docs --project ./my-new-api --lfg --harness codex --reviewer claude:opus
 ```
+
+`--harness` (or `JEEROY_HARNESS`) selects the agent CLI for analysis, Q&A, and the chained Walph phases; `--model` (or `JEEROY_MODEL`) overrides the model. Analysis and `--skip-qa` generation run with restricted access; the interactive Q&A runs with full access because it writes the spec files.
 
 ### Supported Formats
 
@@ -320,7 +379,8 @@ jeeroy ./client-docs --skip-qa --lfg
 
 ### Requirements
 
-- **Claude CLI** (required)
+- **An agent CLI** (required) - claude, codex, or opencode
+- **jq** (required)
 - **pandoc** (required for non-markdown formats) - `brew install pandoc`
 - **chrome-devtools MCP** (recommended for UI projects) - For browser-based UI testing
 
@@ -381,6 +441,10 @@ goodbunny fix --max-iterations 10
 # Generate codebase documentation
 goodbunny analyze
 goodbunny analyze --files lib/    # Scope to specific directory
+
+# Run the review loop on Codex (gpt-6-astra audits, gpt-5.6-sol fixes)
+goodbunny audit --harness codex
+goodbunny fix --harness codex
 ```
 
 ### Review Categories
@@ -402,10 +466,12 @@ goodbunny analyze --files lib/    # Scope to specific directory
 Good Bunny auto-creates `.goodbunny/config` on first run. Override via environment variables:
 
 ```bash
+export GOODBUNNY_HARNESS=codex            # or --harness / HARNESS= in .goodbunny/config
 export GOODBUNNY_MAX_ITERATIONS=50
-export GOODBUNNY_MODEL_AUDIT="opus"
+export GOODBUNNY_MODEL_AUDIT="opus"       # defaults depend on the harness
 export GOODBUNNY_MODEL_FIX="sonnet"
 export GOODBUNNY_MODEL_ANALYZE="opus"
+export GOODBUNNY_REASONING_EFFORT=high    # codex / opencode only
 export GOODBUNNY_ITERATION_TIMEOUT=1200
 ```
 
@@ -442,14 +508,14 @@ This approach scales to large projects where context management becomes critical
 
 ## Security Considerations
 
-**Walph runs Claude with `--dangerously-skip-permissions`**, which means:
-- Claude can read, write, and delete any files in your project
-- Claude can execute any shell commands
-- Claude can make network requests
+**Walph runs the agent with all permissions bypassed** (`--dangerously-skip-permissions` on Claude Code, `--dangerously-bypass-approvals-and-sandbox` on Codex, `--auto` on OpenCode), which means:
+- The agent can read, write, and delete any files in your project
+- The agent can execute any shell commands
+- The agent can make network requests
 
 This is necessary for autonomous operation but means you should:
 
-1. **Review specs carefully** - Claude will do what you ask
+1. **Review specs carefully** - the agent will do what you ask
 2. **Use on trusted codebases** - Don't run on repos with sensitive credentials
 3. **Run in isolated environments** - Consider Docker or VMs for untrusted projects
 4. **Review commits** - Each task creates a git commit you can inspect
@@ -459,6 +525,15 @@ The default Docker credentials (`postgres:postgres`) are for development only. C
 ## License
 
 MIT
+
+## Development
+
+```bash
+shellcheck -x -s bash walph.sh goodbunny.sh jeeroy.sh lib/*.sh   # lint
+tests/run_tests.sh                                              # parser + fake-CLI integration tests (bash 3.2 compatible)
+```
+
+The integration tests never call a real agent: `tests/fake-bins/` contains a scenario-driven fake that impersonates all three CLIs.
 
 ## Contributing
 

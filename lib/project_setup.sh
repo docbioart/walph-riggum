@@ -43,9 +43,10 @@ create_agents_md() {
     local stack_file="$template_dir/stacks/${stack}.txt"
     if [[ -f "$stack_file" ]]; then
         # Read stack file and extract commands
-        build_cmd=$(grep "^build_cmd=" "$stack_file" | cut -d= -f2-)
-        test_cmd=$(grep "^test_cmd=" "$stack_file" | cut -d= -f2-)
-        lint_cmd=$(grep "^lint_cmd=" "$stack_file" | cut -d= -f2-)
+        # Keys are optional: a missing one must not abort under set -e -o pipefail
+        build_cmd=$(grep "^build_cmd=" "$stack_file" | cut -d= -f2- || true)
+        test_cmd=$(grep "^test_cmd=" "$stack_file" | cut -d= -f2- || true)
+        lint_cmd=$(grep "^lint_cmd=" "$stack_file" | cut -d= -f2- || true)
     else
         # Unknown stack - use defaults
         build_cmd="# Add your build command"
@@ -98,9 +99,9 @@ create_agents_md() {
 
             # Override build/test commands if specified in template
             local template_build_cmd template_test_cmd template_lint_cmd
-            template_build_cmd=$(echo "$template_content" | grep "^build_cmd=" | cut -d= -f2-)
-            template_test_cmd=$(echo "$template_content" | grep "^test_cmd=" | cut -d= -f2-)
-            template_lint_cmd=$(echo "$template_content" | grep "^lint_cmd=" | cut -d= -f2-)
+            template_build_cmd=$(echo "$template_content" | grep "^build_cmd=" | cut -d= -f2- || true)
+            template_test_cmd=$(echo "$template_content" | grep "^test_cmd=" | cut -d= -f2- || true)
+            template_lint_cmd=$(echo "$template_content" | grep "^lint_cmd=" | cut -d= -f2- || true)
 
             [[ -n "$template_build_cmd" ]] && build_cmd="$template_build_cmd"
             [[ -n "$template_test_cmd" ]] && test_cmd="$template_test_cmd"

@@ -567,11 +567,8 @@ EOF
 
 ## Tasks
 
-<!-- Tasks will appear here as checkboxes:
-- [ ] Task 1: Description
-- [ ] Task 2: Description
-- [x] Completed task
--->
+<!-- Tasks appear here one per line, as checkboxes: "[ ] Task 1: Description"
+     with a leading dash for open tasks, "[x]" once completed. -->
 
 Run `walph plan` to generate tasks from your specs.
 EOF
@@ -714,6 +711,7 @@ init_walph() {
     log_info "Walph Riggum starting"
     log_info "Mode: $MODE"
     log_info "Harness: $(harness_display_name) ($HARNESS)"
+    warn_if_not_git_repo
     log_info "Max iterations: $MAX_ITERATIONS"
     log_debug "Project directory: $PROJECT_DIR"
     log_debug "Script directory: $SCRIPT_DIR"

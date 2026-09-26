@@ -658,6 +658,7 @@ init_goodbunny() {
     log_info "Good Bunny starting"
     log_info "Mode: $MODE"
     log_info "Harness: $(harness_display_name) ($HARNESS)"
+    warn_if_not_git_repo
     log_info "Max iterations: $MAX_ITERATIONS"
     if [[ -n "$CATEGORIES_FILTER" ]]; then
         log_info "Categories: $CATEGORIES_FILTER"

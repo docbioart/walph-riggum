@@ -15,10 +15,10 @@
 # Usage: Source this file (after lib/harness.sh) and call
 #        run_shared_iteration() with appropriate callbacks for tool-specific
 #        template substitution.
+#
+# shellcheck disable=SC2034  # LOOP_COMPLETED / WALPH_CURRENT_ITERATION are read by callers
 
 set -euo pipefail
-
-# shellcheck disable=SC2034  # LOOP_COMPLETED / WALPH_CURRENT_ITERATION are read by callers
 
 # Track temp files for cleanup on exit
 RUNNER_TEMP_FILES=""

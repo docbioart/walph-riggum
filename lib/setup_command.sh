@@ -233,6 +233,15 @@ EOF
         fi
     fi
 
+    # Walph commits after every task and its circuit breaker watches the
+    # working tree, so the project must be a git repository
+    if ! git -C "$target_dir" rev-parse --git-dir >/dev/null 2>&1; then
+        log_info "Not a git repository — running git init (Walph commits each completed task)"
+        if ! (cd "$target_dir" && git init -q); then
+            log_warn "git init failed; the circuit breaker cannot track changes without a repository"
+        fi
+    fi
+
     log_success "Setup complete!"
 
     # When run inline from 'walph plan'/'walph build', skip the next-steps

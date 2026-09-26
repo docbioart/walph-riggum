@@ -52,6 +52,13 @@ _update_state() {
 # DETECTION LOGIC
 # ============================================================================
 
+# The change and commit detectors need a repository. Outside one they report
+# "progress" so the loop is stopped only by repeated errors or the stuck
+# signal (the tools warn about this at startup — see warn_if_not_git_repo).
+_cb_in_git_repo() {
+    git rev-parse --git-dir >/dev/null 2>&1
+}
+
 # Signature of the current working tree state (dirty file list + tracked diff
 # + untracked file contents). Excludes state dirs to avoid self-resets.
 # git diff doesn't cover untracked files, and new files stay untracked until
@@ -73,6 +80,9 @@ _working_tree_sig() {
 # tree left behind by an aborted iteration would otherwise count as progress
 # on every subsequent iteration, permanently defeating the no-change breaker.
 check_file_changes() {
+    if ! _cb_in_git_repo; then
+        return 0  # Cannot tell; assume progress
+    fi
     local current_hash
     current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
     local last_hash
@@ -114,6 +124,9 @@ check_stuck_signal() {
 # Check if there have been meaningful commits recently
 # Commits that only touch state dirs are not counted (avoids self-resets)
 check_commit_activity() {
+    if ! _cb_in_git_repo; then
+        return 0  # No repository, no commits to count
+    fi
     local current_hash
     current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
     local last_hash
