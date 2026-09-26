@@ -23,9 +23,11 @@ export TOOL_NAME="Jeeroy Lenkins"
 # Source shared libraries
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/lib/harness.sh"
 source "$SCRIPT_DIR/lib/converter.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
 source "$SCRIPT_DIR/lib/spec_lint.sh"
+source "$SCRIPT_DIR/lib/plan_review.sh"   # parse_reviewer_spec / check_reviewer_ready only
 
 # ============================================================================
 # TEMP FILE CLEANUP
@@ -47,14 +49,26 @@ cleanup_temp_files() {
     fi
 }
 
-trap cleanup_temp_files EXIT INT TERM
+_jeeroy_on_signal() {
+    echo ""
+    log_warn "Interrupted — stopping the running agent"
+    harness_kill_current
+    cleanup_temp_files
+    exit 130
+}
 
-# Create a tracked temp file
+trap cleanup_temp_files EXIT
+trap _jeeroy_on_signal INT TERM
+
+# Create a tracked temp file and store its path in the named variable
+# (a $(...) capture would register the file in a subshell and lose it)
+# Usage: make_temp temp_prompt
 make_temp() {
+    local var_name="$1"
     local tmp
     tmp=$(mktemp)
     JEEROY_TEMP_FILES="$JEEROY_TEMP_FILES $tmp"
-    echo "$tmp"
+    eval "$var_name=\"\$tmp\""
 }
 
 # ============================================================================
@@ -66,10 +80,14 @@ PROJECT_DIR=""
 STACK=""
 LFG_MODE=false
 SKIP_QA=false
-MODEL="opus"
+MODEL=""                 # resolved per harness in validate_environment
+MODEL_FLAG=""            # --model
+HARNESS_OVERRIDE=""      # --harness
+REVIEWER=""              # --reviewer, passed through to walph plan in --lfg
 FAST_MODE=false
 DRY_RUN=false
 VERBOSE=false
+JEEROY_TIMEOUT="${JEEROY_TIMEOUT:-1800}"   # seconds per non-interactive agent call
 
 JEEROY_VERSION="1.0.0"
 
@@ -95,8 +113,12 @@ OPTIONS:
     --lfg                 "Let's F***ing Go" - auto-chain into walph
                           (setup -> plan -> build, fully autonomous)
     --skip-qa             Skip interactive Q&A, generate best-effort specs
-    --model <name>        Claude model to use (default: opus)
-    --fast                Enable Claude fast mode (2.5x faster, higher cost)
+    --harness <name>      Agent CLI: claude (default), codex, or opencode
+    --model <name>        Model to use (default per harness: claude=opus,
+                          codex=gpt-6-astra, opencode=your opencode.json model)
+    --reviewer <spec>     With --lfg: have a second model review the plan before
+                          building, e.g. --reviewer codex:gpt-6-astra
+    --fast                Claude fast mode (2.5x faster, higher cost; Claude only)
     --dry-run             Show what would happen without executing
     -v, --verbose         Verbose output
     -h, --help            Show this help
@@ -130,6 +152,7 @@ WORKFLOW:
     4. Claude asks clarifying questions interactively (unless --skip-qa)
     5. Generates spec files in project/specs/
     6. If --lfg: automatically runs walph setup -> plan -> build
+       (with --reviewer, a second model reviews the plan between plan and build)
 
 EOF
 }
@@ -185,7 +208,23 @@ parse_jeeroy_args() {
                     log_error "--model requires a name argument"
                     exit 1
                 fi
-                MODEL="$2"
+                MODEL_FLAG="$2"
+                shift 2
+                ;;
+            --harness)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--harness requires a name: claude, codex, or opencode"
+                    exit 1
+                fi
+                HARNESS_OVERRIDE="$2"
+                shift 2
+                ;;
+            --reviewer)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--reviewer requires <harness>[:<model>], e.g. codex:gpt-6-astra"
+                    exit 1
+                fi
+                REVIEWER="$2"
                 shift 2
                 ;;
             --fast)
@@ -256,18 +295,39 @@ parse_jeeroy_args() {
 # ============================================================================
 
 validate_environment() {
+    # Harness: --harness > JEEROY_HARNESS > claude
+    resolve_harness "$HARNESS_OVERRIDE" "${JEEROY_HARNESS:-}" "" || return 1
+
     local missing=()
-
-    if ! command_exists "claude"; then
-        missing+=("claude (Claude CLI)")
+    if ! harness_check_installed "$HARNESS"; then
+        missing+=("$HARNESS (agent CLI)")
     fi
-
+    if ! command_exists "jq"; then
+        missing+=("jq (used to parse the agent's JSON output)")
+    fi
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required dependencies:"
+        local dep
         for dep in "${missing[@]}"; do
             echo "  - $dep"
         done
         return 1
+    fi
+
+    # Model: --model > JEEROY_MODEL > harness default for planning-grade work
+    harness_resolve_model MODEL plan "${JEEROY_MODEL:-}" "$MODEL_FLAG" || return 1
+
+    if [[ "$FAST_MODE" == "true" ]] && [[ "$HARNESS" != "claude" ]]; then
+        log_warn "--fast is a Claude Code setting; ignored for $HARNESS"
+        FAST_MODE=false
+    fi
+
+    # A plan reviewer only matters with --lfg, but a bad spec should fail now
+    if [[ -n "$REVIEWER" ]]; then
+        if [[ "$LFG_MODE" != "true" ]]; then
+            log_warn "--reviewer only applies with --lfg (it reviews the plan before building)"
+        fi
+        check_reviewer_ready "$REVIEWER" || return 1
     fi
 
     # Check pandoc (warn but don't fail - some files may be .md/.txt only)
@@ -276,10 +336,10 @@ validate_environment() {
         echo "  Install pandoc for docx/pptx/pdf/etc support"
     fi
 
-    # Check chrome-devtools MCP (warn but don't fail - needed for UI testing)
-    if ! check_chrome_mcp; then
-        log_warn "chrome-devtools MCP not found - UI testing will require manual verification"
-        echo "  For automated UI testing, configure chrome-devtools MCP"
+    # Check chrome-devtools MCP for the selected harness (warn but don't fail)
+    if ! check_chrome_mcp "$HARNESS"; then
+        log_warn "chrome-devtools MCP not found in the $HARNESS config - UI testing will require manual verification"
+        echo "  For automated UI testing, configure the chrome-devtools MCP server in $(harness_display_name)"
     fi
 
     return 0
@@ -344,64 +404,65 @@ load_prompt_template() {
 # ANALYSIS PHASE (Non-interactive)
 # ============================================================================
 
+# Run one non-interactive, restricted (no edits/commands) agent call with the
+# given prompt file. Echoes the final response on success. Returns 1 on any
+# failure after logging it (rate limits get the standard resume hint).
+run_restricted_call() {
+    local prompt_file="$1"
+    local what="$2"
+
+    local temp_output temp_err temp_final
+    make_temp temp_output
+    make_temp temp_err
+    make_temp temp_final
+
+    local exit_code=0
+    harness_exec "$MODEL" restricted "$prompt_file" "$temp_output" "$temp_err" "$temp_final" "$JEEROY_TIMEOUT" || exit_code=$?
+    harness_parse_result "$temp_output" "$temp_err" "$temp_final"
+
+    if check_rate_limit "$HARNESS_ERRORS"; then
+        log_error "Rate limit hit during $what" >&2
+        log_info "The $(harness_display_name) API rate limit was reached. Please wait a few minutes and try again." >&2
+        log_info "You can resume by running: jeeroy [same arguments]" >&2
+        return 1
+    fi
+    if [[ $exit_code -eq 124 ]]; then
+        log_error "$(harness_display_name) timed out after ${JEEROY_TIMEOUT}s during $what (set JEEROY_TIMEOUT to raise it)" >&2
+        return 1
+    fi
+    if [[ $exit_code -ne 0 ]] || [[ "$HARNESS_TEXT_OK" != "true" ]]; then
+        log_error "$(harness_display_name) failed during $what (exit code $exit_code)" >&2
+        if [[ -n "$HARNESS_ERRORS" ]]; then
+            printf '%s\n' "$HARNESS_ERRORS" | head -5 >&2
+        else
+            tail -20 "$temp_output" >&2
+            tail -5 "$temp_err" >&2
+        fi
+        return 1
+    fi
+
+    log_debug "$what: $(harness_usage_summary)" >&2
+    printf '%s\n' "$HARNESS_TEXT"
+}
+
 run_analysis() {
     local converted_content="$1"
 
-    log_info "Running document analysis..."
+    log_info "Running document analysis with $(harness_display_name) (${MODEL:-harness default})..."
 
     local prompt
     prompt=$(load_prompt_template "PROMPT_jeeroy_analyze.md") || return 1
 
     # Write full prompt to temp file (avoids shell argument limits)
     local temp_prompt
-    temp_prompt=$(make_temp)
+    make_temp temp_prompt
     {
         printf '%s\n' "$prompt"
         printf '\n---\n\n# Documents to Analyze\n\n'
         printf '%s\n' "$converted_content"
     } > "$temp_prompt"
 
-    local temp_output
-    temp_output=$(make_temp)
-
-    local fast_settings=""
-    if [[ "$FAST_MODE" == "true" ]]; then
-        fast_settings='--settings {"fastMode":true}'
-    fi
-
-    if claude -p \
-        --model "$MODEL" \
-        ${fast_settings} \
-        < "$temp_prompt" \
-        > "$temp_output" 2>&1; then
-        local output
-        output=$(cat "$temp_output")
-
-        # Check for rate limit
-        if check_rate_limit "$output"; then
-            log_error "Rate limit hit during analysis"
-            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
-            log_info "You can resume by running: jeeroy [same arguments]"
-            return 1
-        fi
-
-        echo "$output"
-    else
-        local output
-        output=$(cat "$temp_output")
-
-        # Check if the failure was due to rate limiting
-        if check_rate_limit "$output"; then
-            log_error "Rate limit hit during analysis"
-            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
-            log_info "You can resume by running: jeeroy [same arguments]"
-            return 1
-        fi
-
-        log_error "Claude analysis failed"
-        cat "$temp_output" >&2
-        return 1
-    fi
+    run_restricted_call "$temp_prompt" "analysis"
 }
 
 # Extract the analysis block from Claude's output
@@ -447,18 +508,14 @@ run_qa_session() {
         printf '%s\n' "$converted_content"
     } > "$context_file"
 
-    local fast_settings=""
-    if [[ "$FAST_MODE" == "true" ]]; then
-        fast_settings='--settings {"fastMode":true}'
-    fi
-
-    # Run Claude interactively (NOT in print mode)
-    # The initial prompt tells Claude to read the context and begin
-    claude \
-        --model "$MODEL" \
-        --dangerously-skip-permissions \
-        ${fast_settings} \
-        "Read the file at $context_file which contains project documentation and instructions for a Jeeroy Lenkins Q&A session. Follow those instructions: summarize what you found, ask clarifying questions ONE AT A TIME (waiting for my response each time), then write the spec files directly to $specs_dir/. Start now."
+    # Run the agent interactively (NOT in print mode). The initial prompt
+    # tells it to read the context file and begin. The session needs write
+    # access to create the spec files, so it runs with full access.
+    harness_interactive_cmd "$MODEL" \
+        "Read the file at $context_file which contains project documentation and instructions for a Jeeroy Lenkins Q&A session. Follow those instructions: summarize what you found, ask clarifying questions ONE AT A TIME (waiting for my response each time), then write the spec files directly to $specs_dir/. Start now." || return 1
+    log_info "Starting $(harness_display_name) interactively (${MODEL:-harness default})..."
+    (cd "$PROJECT_DIR" && env ${HARNESS_ENV[@]+"${HARNESS_ENV[@]}"} "${HARNESS_CMD[@]}") || \
+        log_warn "$(harness_display_name) exited with a non-zero status; checking for specs anyway"
 
     # Clean up context file
     rm -f "$context_file"
@@ -472,14 +529,14 @@ run_direct_generation() {
     local converted_content="$1"
     local analysis_output="$2"
 
-    log_info "Generating specs directly (skip-qa mode)..."
+    log_info "Generating specs directly (skip-qa mode) with $(harness_display_name) (${MODEL:-harness default})..."
 
     local prompt
     prompt=$(load_prompt_template "PROMPT_jeeroy_qa.md") || return 1
 
     # Write full prompt to temp file
     local temp_prompt
-    temp_prompt=$(make_temp)
+    make_temp temp_prompt
     {
         printf '%s\n' "$prompt"
         printf '\n'
@@ -499,47 +556,7 @@ run_direct_generation() {
         printf '%s\n' "$converted_content"
     } > "$temp_prompt"
 
-    local temp_output
-    temp_output=$(make_temp)
-
-    local fast_settings=""
-    if [[ "$FAST_MODE" == "true" ]]; then
-        fast_settings='--settings {"fastMode":true}'
-    fi
-
-    if claude -p \
-        --model "$MODEL" \
-        ${fast_settings} \
-        < "$temp_prompt" \
-        > "$temp_output" 2>&1; then
-        local output
-        output=$(cat "$temp_output")
-
-        # Check for rate limit
-        if check_rate_limit "$output"; then
-            log_error "Rate limit hit during spec generation"
-            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
-            log_info "You can resume by running: jeeroy [same arguments]"
-            return 1
-        fi
-
-        echo "$output"
-    else
-        local output
-        output=$(cat "$temp_output")
-
-        # Check if the failure was due to rate limiting
-        if check_rate_limit "$output"; then
-            log_error "Rate limit hit during spec generation"
-            log_info "Claude API rate limit reached. Please wait a few minutes and try again."
-            log_info "You can resume by running: jeeroy [same arguments]"
-            return 1
-        fi
-
-        log_error "Spec generation failed"
-        cat "$temp_output" >&2
-        return 1
-    fi
+    run_restricted_call "$temp_prompt" "spec generation"
 }
 
 # ============================================================================
@@ -708,11 +725,20 @@ run_lfg_pipeline() {
         log_info "Step 1/3: Walph already set up, skipping..."
     fi
 
-    # Step 2: Run planning
+    # Harness/model choices follow into Walph
+    local harness_args=(--harness "$HARNESS")
+    local reviewer_args=()
+    if [[ -n "$REVIEWER" ]]; then
+        reviewer_args=(--reviewer "$REVIEWER")
+    fi
+
+    # Step 2: Run planning (with the optional second-model review). If a
+    # review was requested and did not complete, walph plan exits non-zero
+    # and we must not start an autonomous build on an unreviewed plan.
     log_info "Step 2/3: Running Walph planning..."
-    (cd "$PROJECT_DIR" && "$walph_script" plan --max-iterations 3) || {
-        log_error "Walph planning failed. Fix issues and run manually:"
-        echo "  cd $PROJECT_DIR && walph plan"
+    (cd "$PROJECT_DIR" && "$walph_script" plan --max-iterations 3 "${harness_args[@]}" ${reviewer_args[@]+"${reviewer_args[@]}"}) || {
+        log_error "Walph planning (or its plan review) did not complete. Fix issues and run manually:"
+        echo "  cd $PROJECT_DIR && walph plan --harness $HARNESS${REVIEWER:+ --reviewer $REVIEWER}"
         return 1
     }
 
@@ -746,9 +772,9 @@ run_lfg_pipeline() {
 
     # Step 3: Run building
     log_info "Step 3/3: Running Walph building..."
-    (cd "$PROJECT_DIR" && "$walph_script" build) || {
+    (cd "$PROJECT_DIR" && "$walph_script" build "${harness_args[@]}") || {
         log_error "Walph building failed. Check logs and resume:"
-        echo "  cd $PROJECT_DIR && walph build"
+        echo "  cd $PROJECT_DIR && walph build --harness $HARNESS"
         return 1
     }
 
@@ -777,6 +803,7 @@ main() {
     # Show what we found
     log_info "Documents directory: $DOCS_DIR"
     log_info "Target project: $PROJECT_DIR"
+    log_info "Harness: $(harness_display_name) ($HARNESS), model: ${MODEL:-harness default}"
     if [[ -n "$STACK" ]]; then log_info "Stack hint: $STACK"; fi
     if [[ "$LFG_MODE" == "true" ]]; then log_info "LFG mode: ENGAGED"; fi
     if [[ "$SKIP_QA" == "true" ]]; then log_info "Skip Q&A: Yes"; fi
@@ -799,9 +826,11 @@ main() {
 
     # Dry run stops here
     if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "[DRY RUN] Would convert $file_count files and analyze with Claude ($MODEL)"
+        log_info "[DRY RUN] Would convert $file_count files and analyze with $(harness_display_name) (${MODEL:-harness default})"
+        harness_build_cmd "$MODEL" restricted "<final-message-file>" || exit 1
+        echo "  Command: $(harness_cmd_string) < <prompt>"
         if [[ "$SKIP_QA" == "true" ]]; then echo "  Would skip Q&A and generate specs directly"; fi
-        if [[ "$LFG_MODE" == "true" ]]; then echo "  Would chain into: walph setup -> plan -> build"; fi
+        if [[ "$LFG_MODE" == "true" ]]; then echo "  Would chain into: walph setup -> plan${REVIEWER:+ -> review-plan ($REVIEWER)} -> build (--harness $HARNESS)"; fi
         exit 0
     fi
 
@@ -944,8 +973,8 @@ main() {
         log_info "Specs generated! Next steps:"
         echo "  1. Review specs in $specs_dir/"
         echo "  2. Run: walph setup   (if not already set up)"
-        echo "  3. Run: walph plan"
-        echo "  4. Run: walph build"
+        echo "  3. Run: walph plan --harness $HARNESS"
+        echo "  4. Run: walph build --harness $HARNESS"
         echo ""
         echo "  Or run with --lfg to do it all automatically!"
     fi

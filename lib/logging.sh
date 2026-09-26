@@ -118,16 +118,14 @@ log_iteration_start() {
     fi
 }
 
-# Log raw Claude output to file
-log_claude_output() {
-    local output="$1"
-    if [[ -n "$WALPH_LOG_FILE" ]]; then
-        echo "$output" >> "$WALPH_LOG_FILE"
-    fi
-}
-
-# Append one line per iteration to a session summary CSV (cost, duration,
-# outcome). Expensive iterations are a strong signal of under-specified specs.
+# Append one line per iteration to a session summary CSV (cost, tokens,
+# duration, outcome). Expensive iterations are a strong signal of
+# under-specified specs. Cost is blank when the harness doesn't report dollars
+# (codex); tokens are blank when unknown; usage_complete is false when the
+# harness's event stream ended early (killed, crashed).
+#
+# Usage: log_iteration_summary <iteration> <mode> <model> <duration> <cost> <status> \
+#                              [harness] [tokens_in] [tokens_out] [usage_complete]
 log_iteration_summary() {
     local iteration="$1"
     local mode="$2"
@@ -135,15 +133,39 @@ log_iteration_summary() {
     local duration="$4"
     local cost="$5"
     local status="$6"
+    local harness="${7:-claude}"
+    local tokens_in="${8:-}"
+    local tokens_out="${9:-}"
+    local usage_complete="${10:-}"
 
     [[ -z "$WALPH_LOG_FILE" ]] && return 0
 
     local summary_file="${WALPH_LOG_FILE%.log}_summary.csv"
     if [[ ! -f "$summary_file" ]]; then
-        echo "timestamp,iteration,mode,model,duration_seconds,cost_usd,status" > "$summary_file"
+        echo "timestamp,iteration,mode,harness,model,duration_seconds,cost_usd,tokens_in,tokens_out,usage_complete,status" > "$summary_file"
     fi
     # Status text may contain commas/quotes/newlines — flatten and wrap
     local safe_status="${status//$'\n'/ | }"
     safe_status="${safe_status//\"/\'}"
-    echo "$(date -Iseconds),$iteration,$mode,$model,$duration,${cost:-},\"$safe_status\"" >> "$summary_file"
+    echo "$(date -Iseconds),$iteration,$mode,$harness,${model:-default},$duration,${cost:-},${tokens_in:-},${tokens_out:-},${usage_complete:-},\"$safe_status\"" >> "$summary_file"
+}
+
+# Log the raw agent transcript (stdout stream and stderr) to the session log
+# file only — the console shows the final response, not the event stream
+log_harness_transcript() {
+    local stdout_file="$1"
+    local stderr_file="${2:-}"
+    [[ -z "$WALPH_LOG_FILE" ]] && return 0
+
+    if [[ -s "$stdout_file" ]]; then
+        echo "--- harness stdout ---" >> "$WALPH_LOG_FILE"
+        cat "$stdout_file" >> "$WALPH_LOG_FILE"
+        echo "" >> "$WALPH_LOG_FILE"
+    fi
+    if [[ -n "$stderr_file" ]] && [[ -s "$stderr_file" ]]; then
+        echo "--- harness stderr ---" >> "$WALPH_LOG_FILE"
+        cat "$stderr_file" >> "$WALPH_LOG_FILE"
+        echo "" >> "$WALPH_LOG_FILE"
+    fi
+    return 0
 }

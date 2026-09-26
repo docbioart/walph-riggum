@@ -17,8 +17,10 @@ show_howto() {
 ║                    Autonomous Coding Loop for Claude                          ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-Walph runs Claude in an autonomous loop to plan and build software projects.
-It uses Opus for planning and Sonnet for building, with fresh context each iteration.
+Walph runs a coding agent in an autonomous loop to plan and build software
+projects, with fresh context each iteration. It drives Claude Code by default
+(Opus plans/verifies, Sonnet builds) and can run on Codex or OpenCode instead
+with --harness.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  QUICK START
@@ -68,8 +70,20 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
     --max-iterations N          Limit iterations (default: 50)
     --model <name>              Override model (default: opus)
 
+  walph review-plan --reviewer <harness>[:<model>]
+                                Second model reviews IMPLEMENTATION_PLAN.md,
+                                then the planner reconciles its findings
+                                (also: walph plan --reviewer codex:gpt-6-astra)
+
   walph status                  Show current progress
   walph reset                   Reset circuit breaker (if stuck)
+
+  Every plan/build/verify command accepts:
+    --harness <name>            claude (default), codex, or opencode
+                                Model defaults per harness:
+                                  claude   opus / sonnet / opus
+                                  codex    gpt-6-astra / gpt-5.6-sol / gpt-6-astra
+                                  opencode the model in your opencode.json
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  HOW IT WORKS
@@ -107,7 +121,10 @@ It uses Opus for planning and Sonnet for building, with fresh context each itera
   │   ├── config                 # Settings (iterations, models, thresholds)
   │   ├── PROMPT_plan.md         # Planning prompt (customizable)
   │   ├── PROMPT_build.md        # Building prompt (customizable)
-  │   ├── logs/                  # Session logs
+  │   ├── PROMPT_verify.md       # Verification prompt
+  │   ├── PROMPT_plan_review.md  # Second-model plan review prompt
+  │   ├── PRINCIPLES.md          # Engineering rules injected into every prompt
+  │   ├── logs/                  # Session logs + per-iteration cost CSV
   │   └── state/                 # Circuit breaker state
   ├── specs/                     # Your requirements
   │   └── *.md                   # Feature specs (Walph reads all .md files)
@@ -169,13 +186,17 @@ COMMANDS:
     build             Run in building mode (implements from plan) [default]
                       (chains into verify automatically on completion)
     verify            Verify implementation against spec acceptance criteria
+    review-plan       Second model reviews the plan, planner reconciles (needs --reviewer)
     status            Show current state and progress
     reset             Reset circuit breaker and state
 
 OPTIONS:
     --max-iterations N    Maximum iterations (default: 50)
-    --model MODEL         Override model for this run
-    --fast                Enable Claude fast mode (2.5x faster, higher cost)
+    --harness NAME        Agent CLI to run: claude (default), codex, opencode
+    --model MODEL         Override model for this run (must fit the harness)
+    --reviewer SPEC       Second-model plan review: <harness>[:<model>],
+                          e.g. codex:gpt-6-astra or claude:opus (no default)
+    --fast                Enable Claude fast mode (2.5x faster, higher cost; Claude only)
     --monitor             Enable tmux monitoring view
     --dry-run             Show what would be run without executing
     -v, --verbose         Enable verbose output
@@ -192,7 +213,9 @@ EXAMPLES:
 
     # Run Walph
     walph.sh plan                        # Generate implementation plan
+    walph.sh plan --reviewer codex:gpt-6-astra   # ...and have Codex Astra review it
     walph.sh build --max-iterations 10   # Build with limited iterations
+    walph.sh build --harness codex       # Build on Codex instead of Claude Code
     walph.sh status                      # Check current progress
 
 WORKFLOW (new project):

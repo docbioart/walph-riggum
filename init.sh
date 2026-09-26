@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source libraries
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/harness.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
@@ -103,13 +104,13 @@ create_walph_structure() {
     # Copy config template
     write_default_config "$project_dir/.walph/config"
 
-    # Copy prompt templates
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_plan.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_plan.md" "$project_dir/.walph/"
-    fi
-    if [[ -f "$SCRIPT_DIR/templates/PROMPT_build.md" ]]; then
-        cp "$SCRIPT_DIR/templates/PROMPT_build.md" "$project_dir/.walph/"
-    fi
+    # Copy prompt templates (plus shared principles, customizable per project)
+    local tmpl
+    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PROMPT_plan_review.md PRINCIPLES.md; do
+        if [[ -f "$SCRIPT_DIR/templates/$tmpl" ]]; then
+            cp "$SCRIPT_DIR/templates/$tmpl" "$project_dir/.walph/"
+        fi
+    done
 }
 
 # Removed: now using create_agents_md from lib/project_setup.sh

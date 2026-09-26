@@ -32,12 +32,12 @@ substitute_placeholder() {
     printf '%s' "$result$content"
 }
 
-# Check required dependencies
+# Check required dependencies: the resolved harness CLI, git, and jq
 check_dependencies() {
     local missing=()
 
-    if ! command_exists "claude"; then
-        missing+=("claude (Claude CLI)")
+    if ! harness_check_installed "${HARNESS:-claude}"; then
+        missing+=("${HARNESS:-claude} (agent CLI)")
     fi
 
     if ! command_exists "git"; then
@@ -50,6 +50,7 @@ check_dependencies() {
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required dependencies:"
+        local dep
         for dep in "${missing[@]}"; do
             echo "  - $dep"
         done
@@ -59,36 +60,50 @@ check_dependencies() {
     return 0
 }
 
-# Check if chrome-devtools MCP is configured
+# Advisory check: does the selected harness have a chrome-devtools MCP server
+# configured? Looks only at that harness's own config files, since a server
+# configured for one CLI is not evidence another CLI can use it.
+# Usage: check_chrome_mcp [harness]
 check_chrome_mcp() {
-    local chrome_mcp_found=false
+    local harness="${1:-${HARNESS:-claude}}"
+    local project_dir="${PROJECT_DIR:-.}"
+    local candidates=()
 
-    # Check Linux/XDG config location
-    if [[ -f "${HOME}/.config/claude/claude_desktop_config.json" ]]; then
-        if grep -q "chrome-devtools" "${HOME}/.config/claude/claude_desktop_config.json" 2>/dev/null; then
-            chrome_mcp_found=true
+    case "$harness" in
+        claude)
+            candidates=(
+                "${HOME}/.claude.json"
+                "${HOME}/.claude/mcp.json"
+                "${project_dir}/.mcp.json"
+                "${HOME}/.config/claude/claude_desktop_config.json"
+                "${HOME}/Library/Application Support/Claude/claude_desktop_config.json"
+            )
+            ;;
+        codex)
+            candidates=(
+                "${CODEX_HOME:-${HOME}/.codex}/config.toml"
+                "${project_dir}/.codex/config.toml"
+            )
+            ;;
+        opencode)
+            candidates=(
+                "${OPENCODE_CONFIG:-}"
+                "${XDG_CONFIG_HOME:-${HOME}/.config}/opencode/opencode.json"
+                "${XDG_CONFIG_HOME:-${HOME}/.config}/opencode/opencode.jsonc"
+                "${project_dir}/opencode.json"
+                "${project_dir}/opencode.jsonc"
+            )
+            ;;
+    esac
+
+    local file
+    for file in ${candidates[@]+"${candidates[@]}"}; do
+        [[ -n "$file" ]] && [[ -f "$file" ]] || continue
+        if grep -q "chrome-devtools" "$file" 2>/dev/null; then
+            return 0
         fi
-    fi
-
-    # Check macOS config location
-    if [[ -f "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" ]]; then
-        if grep -q "chrome-devtools" "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" 2>/dev/null; then
-            chrome_mcp_found=true
-        fi
-    fi
-
-    # Check Claude Code MCP config
-    if [[ -f "${HOME}/.claude/mcp.json" ]]; then
-        if grep -q "chrome-devtools" "${HOME}/.claude/mcp.json" 2>/dev/null; then
-            chrome_mcp_found=true
-        fi
-    fi
-
-    if [[ "$chrome_mcp_found" == "true" ]]; then
-        return 0
-    else
-        return 1
-    fi
+    done
+    return 1
 }
 
 # ============================================================================

@@ -62,7 +62,10 @@ WHAT IT CREATES:
       ├── state/          # Circuit breaker state
       ├── config          # Configuration overrides
       ├── PROMPT_plan.md  # Planning prompt (customizable)
-      └── PROMPT_build.md # Building prompt (customizable)
+      ├── PROMPT_build.md # Building prompt (customizable)
+      ├── PROMPT_verify.md        # Verification prompt
+      ├── PROMPT_plan_review.md   # Second-model plan review prompt
+      └── PRINCIPLES.md   # Engineering rules injected into every prompt
     specs/                # Your requirements (if not exists)
     AGENTS.md             # Build/test commands (if not exists)
     IMPLEMENTATION_PLAN.md # Task list (if not exists)
@@ -158,29 +161,14 @@ run_setup() {
 
     # Copy prompt templates (plus shared principles, customizable per project)
     local tmpl
-    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PRINCIPLES.md; do
+    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PROMPT_plan_review.md PRINCIPLES.md; do
         if [[ -f "$SCRIPT_DIR/templates/$tmpl" ]]; then
             cp "$SCRIPT_DIR/templates/$tmpl" "$target_dir/.walph/"
         fi
     done
 
-    # Create config file
-    cat > "$target_dir/.walph/config" << 'EOF'
-# Walph Riggum Configuration
-# Uncomment and modify as needed
-
-# Maximum iterations before stopping
-# MAX_ITERATIONS=50
-
-# Models (use aliases: opus, sonnet, or full model names)
-# MODEL_PLAN="opus"
-# MODEL_BUILD="sonnet"
-
-# Circuit breaker thresholds
-# CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
-# CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
-# CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
-EOF
+    # Create config file (harness, models, thresholds — all commented defaults)
+    write_default_config "$target_dir/.walph/config"
 
     # Create specs directory if it doesn't exist
     if [[ ! -d "$target_dir/specs" ]]; then

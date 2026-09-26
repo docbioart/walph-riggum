@@ -62,14 +62,14 @@ If the project has both a frontend and a backend (or any API boundary):
 
 ### UI Testing (Critical)
 
-**Compile success does NOT mean the UI works.** If the project has a UI (web, mobile, desktop), actual browser testing is required using chrome-devtools MCP:
+**Compile success does NOT mean the UI works.** If the project has a UI (web, mobile, desktop), actual browser testing is required using the chrome-devtools MCP server's tools (tool names carry a harness-specific prefix such as `mcp__chrome-devtools__`; the tools themselves are the same):
 
 ```
-1. mcp__chrome-devtools__navigate_page to the dev server URL
-2. mcp__chrome-devtools__take_snapshot to see the page state
-3. mcp__chrome-devtools__click on interactive elements
-4. mcp__chrome-devtools__fill for form inputs
-5. mcp__chrome-devtools__list_console_messages to check for errors
+1. navigate_page to the dev server URL
+2. take_snapshot to see the page state
+3. click on interactive elements
+4. fill for form inputs
+5. list_console_messages to check for errors
 ```
 
 Never declare UI work complete without verifying it renders and functions in a real browser.

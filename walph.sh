@@ -13,12 +13,14 @@ PROJECT_DIR="$(pwd)"
 
 # Source library files
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/harness.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
 source "$SCRIPT_DIR/lib/spec_lint.sh"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/runner.sh"
+source "$SCRIPT_DIR/lib/plan_review.sh"
 source "$SCRIPT_DIR/lib/project_setup.sh"
 source "$SCRIPT_DIR/lib/setup_command.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
@@ -29,8 +31,10 @@ source "$SCRIPT_DIR/lib/walph_help.sh"
 # ============================================================================
 
 MODE="build"
-MAX_ITERATIONS=""
+MAX_ITERATIONS_OVERRIDE=""
 MODEL_OVERRIDE=""
+HARNESS_OVERRIDE=""
+REVIEWER_OVERRIDE=""
 MONITOR_MODE=false
 FAST_MODE=false
 DRY_RUN=false
@@ -84,6 +88,10 @@ parse_args() {
                 MODE="verify"
                 shift
                 ;;
+            review-plan)
+                MODE="review-plan"
+                shift
+                ;;
             status)
                 show_status
                 exit 0
@@ -103,7 +111,7 @@ parse_args() {
                     show_help
                     exit 1
                 fi
-                MAX_ITERATIONS="$2"
+                MAX_ITERATIONS_OVERRIDE="$2"
                 shift 2
                 ;;
             --model)
@@ -113,6 +121,24 @@ parse_args() {
                     exit 1
                 fi
                 MODEL_OVERRIDE="$2"
+                shift 2
+                ;;
+            --harness)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--harness requires a name: claude, codex, or opencode"
+                    show_help
+                    exit 1
+                fi
+                HARNESS_OVERRIDE="$2"
+                shift 2
+                ;;
+            --reviewer)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--reviewer requires <harness>[:<model>], e.g. codex:gpt-6-astra"
+                    show_help
+                    exit 1
+                fi
+                REVIEWER_OVERRIDE="$2"
                 shift 2
                 ;;
             --monitor)
@@ -467,30 +493,14 @@ run_init() {
 
     # Copy prompt templates (plus shared principles, customizable per project)
     local tmpl
-    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PRINCIPLES.md; do
+    for tmpl in PROMPT_plan.md PROMPT_build.md PROMPT_verify.md PROMPT_plan_review.md PRINCIPLES.md; do
         if [[ -f "$SCRIPT_DIR/templates/$tmpl" ]]; then
             cp "$SCRIPT_DIR/templates/$tmpl" "$target_dir/.walph/"
         fi
     done
 
-    # Create config file
-    cat > "$target_dir/.walph/config" << 'EOF'
-# Walph Riggum Configuration
-# Uncomment and modify as needed
-
-# Maximum iterations before stopping
-# MAX_ITERATIONS=50
-
-# Models (use aliases: opus, sonnet, or full model names)
-# MODEL_PLAN="opus"
-# MODEL_BUILD="sonnet"
-# MODEL_VERIFY="opus"
-
-# Circuit breaker thresholds
-# CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD=3
-# CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD=5
-# CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD=5
-EOF
+    # Create config file (harness, models, thresholds — all commented defaults)
+    write_default_config "$target_dir/.walph/config"
 
     # Create specs directory with templates
     log_info "Creating specs directory..."
@@ -638,14 +648,17 @@ main_loop() {
 # ============================================================================
 
 init_walph() {
-    # Load configuration
-    load_config
+    # Load configuration (resolves the harness, then harness-aware model defaults)
+    load_config || exit 1
 
-    # Apply command line overrides
-    if [[ -n "$MAX_ITERATIONS" ]]; then
-        MAX_ITERATIONS="$MAX_ITERATIONS"
-    else
-        MAX_ITERATIONS="${DEFAULT_MAX_ITERATIONS}"
+    if [[ "$FAST_MODE" == "true" ]] && [[ "$HARNESS" != "claude" ]]; then
+        log_warn "--fast is a Claude Code setting; ignored for $HARNESS (configure speed in the $HARNESS CLI itself)"
+        FAST_MODE=false
+    fi
+
+    # Command line overrides beat config file and environment
+    if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
+        MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
     fi
 
     # Check dependencies
@@ -685,10 +698,22 @@ init_walph() {
     fi
 
     # Set resume command for rate limit handler
-    export RESUME_COMMAND="walph $MODE"
+    HARNESS_FLAG=""
+    if [[ "$HARNESS" != "claude" ]]; then
+        HARNESS_FLAG=" --harness $HARNESS"
+    fi
+    export RESUME_COMMAND="walph $MODE$HARNESS_FLAG"
+
+    # A requested plan reviewer must be valid and installed before we spend a
+    # whole planning loop
+    PLAN_REVIEWER_SPEC="${REVIEWER_OVERRIDE:-$PLAN_REVIEWER}"
+    if [[ -n "$PLAN_REVIEWER_SPEC" ]]; then
+        check_reviewer_ready "$PLAN_REVIEWER_SPEC" || exit 1
+    fi
 
     log_info "Walph Riggum starting"
     log_info "Mode: $MODE"
+    log_info "Harness: $(harness_display_name) ($HARNESS)"
     log_info "Max iterations: $MAX_ITERATIONS"
     log_debug "Project directory: $PROJECT_DIR"
     log_debug "Script directory: $SCRIPT_DIR"
@@ -744,9 +769,32 @@ main() {
         fi
     fi
 
-    # Run main loop
-    main_loop
-    local exit_code=$?
+    # Standalone plan review: one reviewer pass + one reconciliation pass
+    if [[ "$MODE" == "review-plan" ]]; then
+        if [[ -z "$PLAN_REVIEWER_SPEC" ]]; then
+            log_error "review-plan needs --reviewer <harness>[:<model>] (or PLAN_REVIEWER in .walph/config)"
+            exit 1
+        fi
+        local review_exit=0
+        run_plan_review "$PLAN_REVIEWER_SPEC" || review_exit=$?
+        echo ""
+        log_info "Session complete"
+        exit $review_exit
+    fi
+
+    # Run main loop (capture the status without tripping errexit)
+    local exit_code=0
+    main_loop || exit_code=$?
+
+    # After a completed plan, optionally have a second model review it
+    if [[ "$MODE" == "plan" ]] && [[ -n "$PLAN_REVIEWER_SPEC" ]] && [[ "$DRY_RUN" != "true" ]]; then
+        if [[ "${LOOP_COMPLETED:-false}" == "true" ]]; then
+            run_plan_review "$PLAN_REVIEWER_SPEC" || exit_code=1
+        else
+            log_warn "Planning did not complete — skipping the plan review (run 'walph review-plan --reviewer $PLAN_REVIEWER_SPEC' once the plan is ready)"
+            exit_code=1
+        fi
+    fi
 
     # After a completed build, chain into verification: check the
     # implementation against the specs' acceptance criteria, not just the plan.
@@ -761,8 +809,8 @@ main() {
         export TOOL_MODE="$MODE"
         export RESUME_COMMAND="walph verify"
         unset COMPLETION_GROUND_TRUTH
-        main_loop
-        exit_code=$?
+        exit_code=0
+        main_loop || exit_code=$?
 
         # Verification files failing criteria as new plan tasks — surface them
         if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]] && has_unchecked_boxes "$PROJECT_DIR/IMPLEMENTATION_PLAN.md"; then

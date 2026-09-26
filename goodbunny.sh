@@ -19,6 +19,7 @@ export TOOL_NAME="Good Bunny"
 
 # Source library files
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/harness.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/circuit_breaker.sh"
 source "$SCRIPT_DIR/lib/status_parser.sh"
@@ -34,9 +35,7 @@ GB_VERSION="1.0.0"
 
 # Default configuration
 GB_DEFAULT_MAX_ITERATIONS=30
-GB_DEFAULT_MODEL_AUDIT="opus"
-GB_DEFAULT_MODEL_FIX="sonnet"
-GB_DEFAULT_MODEL_ANALYZE="opus"
+# Model defaults are per harness — see harness_model_default in lib/harness.sh
 GB_DEFAULT_ITERATION_TIMEOUT=900
 GB_DEFAULT_CB_NO_CHANGE=3
 GB_DEFAULT_CB_SAME_ERROR=3
@@ -52,8 +51,9 @@ GB_STATE_DIR="$GB_DIR/state"
 # ============================================================================
 
 MODE=""
-MAX_ITERATIONS=""
+MAX_ITERATIONS_OVERRIDE=""
 MODEL_OVERRIDE=""
+HARNESS_OVERRIDE=""
 TIMEOUT_OVERRIDE=""
 DRY_RUN=false
 VERBOSE=false
@@ -100,7 +100,7 @@ parse_args() {
                     show_gb_help
                     exit 1
                 fi
-                MAX_ITERATIONS="$2"
+                MAX_ITERATIONS_OVERRIDE="$2"
                 shift 2
                 ;;
             --model)
@@ -110,6 +110,15 @@ parse_args() {
                     exit 1
                 fi
                 MODEL_OVERRIDE="$2"
+                shift 2
+                ;;
+            --harness)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--harness requires a name: claude, codex, or opencode"
+                    show_gb_help
+                    exit 1
+                fi
+                HARNESS_OVERRIDE="$2"
                 shift 2
                 ;;
             --categories)
@@ -180,6 +189,8 @@ parse_args() {
 # CONFIGURATION
 # ============================================================================
 
+GB_CONFIG_KEYS='MAX_ITERATIONS|MODEL_AUDIT|MODEL_FIX|MODEL_ANALYZE|ITERATION_TIMEOUT|CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|HARNESS|REASONING_EFFORT|GOODBUNNY_MAX_ITERATIONS|GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_MODEL_ANALYZE|GOODBUNNY_ITERATION_TIMEOUT|GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT'
+
 load_goodbunny_config() {
     local project_config="$PROJECT_DIR/$GB_DIR/config"
 
@@ -189,45 +200,34 @@ load_goodbunny_config() {
     unset CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD
     unset CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD
 
-    # Load from config file if it exists (safely parse as key=value)
-    if [[ -f "$project_config" ]]; then
-        # Read config file line by line, validate format, and set variables
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            # Skip empty lines and comments
-            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    # Safe KEY=VALUE reader shared with Walph (never sources the file)
+    load_config_file "$project_config" "$GB_CONFIG_KEYS"
 
-            # Validate line matches KEY=VALUE pattern (only uppercase letters, numbers, underscores in key)
-            if [[ "$line" =~ ^[A-Z_][A-Z0-9_]*=(.*)$ ]]; then
-                # Extract key and value
-                local key="${line%%=*}"
-                local value="${line#*=}"
-
-                # Only allow known configuration variables
-                case "$key" in
-                    MAX_ITERATIONS|MODEL_AUDIT|MODEL_FIX|MODEL_ANALYZE|ITERATION_TIMEOUT|\
-                    CIRCUIT_BREAKER_NO_CHANGE_THRESHOLD|CIRCUIT_BREAKER_SAME_ERROR_THRESHOLD|\
-                    CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|GOODBUNNY_MAX_ITERATIONS|\
-                    GOODBUNNY_MODEL_AUDIT|GOODBUNNY_MODEL_FIX|GOODBUNNY_MODEL_ANALYZE|\
-                    GOODBUNNY_ITERATION_TIMEOUT|\
-                    GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
-                        # Safe assignment using eval with proper quoting
-                        eval "$key=\"\$value\""
-                        ;;
-                esac
-            fi
-        done < "$project_config"
-    fi
+    # Harness first: model defaults depend on it
+    resolve_harness "${HARNESS_OVERRIDE:-}" "${GOODBUNNY_HARNESS:-}" "${HARNESS:-}" || return 1
 
     # Apply env var overrides → config file → defaults
     MAX_ITERATIONS="${GOODBUNNY_MAX_ITERATIONS:-${MAX_ITERATIONS:-$GB_DEFAULT_MAX_ITERATIONS}}"
-    MODEL_AUDIT="${GOODBUNNY_MODEL_AUDIT:-${MODEL_AUDIT:-$GB_DEFAULT_MODEL_AUDIT}}"
-    MODEL_FIX="${GOODBUNNY_MODEL_FIX:-${MODEL_FIX:-$GB_DEFAULT_MODEL_FIX}}"
-    MODEL_ANALYZE="${GOODBUNNY_MODEL_ANALYZE:-${MODEL_ANALYZE:-$GB_DEFAULT_MODEL_ANALYZE}}"
     ITERATION_TIMEOUT="${GOODBUNNY_ITERATION_TIMEOUT:-${ITERATION_TIMEOUT:-$GB_DEFAULT_ITERATION_TIMEOUT}}"
+    REASONING_EFFORT="${GOODBUNNY_REASONING_EFFORT:-${REASONING_EFFORT:-}}"
+
+    harness_resolve_model MODEL_AUDIT   audit   "${GOODBUNNY_MODEL_AUDIT:-}"   || return 1
+    harness_resolve_model MODEL_FIX     fix     "${GOODBUNNY_MODEL_FIX:-}"     || return 1
+    harness_resolve_model MODEL_ANALYZE analyze "${GOODBUNNY_MODEL_ANALYZE:-}" || return 1
+
+    # --model applies to this whole run; reject a Claude-only name on another harness
+    if [[ -n "$MODEL_OVERRIDE" ]]; then
+        # shellcheck disable=SC2034  # written through eval by harness_resolve_model
+        local checked_override="$MODEL_OVERRIDE"
+        harness_resolve_model checked_override "$MODE" "" "$MODEL_OVERRIDE" || return 1
+    fi
 
     # CLI flag overrides (highest priority)
     if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
         ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
+    fi
+    if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
+        MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
     fi
 
     # Circuit breaker thresholds (tighter than walph defaults)
@@ -237,7 +237,11 @@ load_goodbunny_config() {
     CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD="${GOODBUNNY_CB_NO_COMMIT:-${CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD:-$GB_DEFAULT_CB_NO_COMMIT}}"
 
     # Set resume command for rate limit handler
-    export RESUME_COMMAND="goodbunny $MODE"
+    local harness_flag=""
+    if [[ "$HARNESS" != "claude" ]]; then
+        harness_flag=" --harness $HARNESS"
+    fi
+    export RESUME_COMMAND="goodbunny $MODE$harness_flag"
 
     # Shared engineering principles injected into prompts ({{PRINCIPLES}})
     if [[ -f "$PROJECT_DIR/$GB_DIR/PRINCIPLES.md" ]]; then
@@ -247,13 +251,14 @@ load_goodbunny_config() {
     fi
     export PRINCIPLES_FILE
 
-    # Ground truth for completion: in fix mode, don't trust Claude's
+    # Ground truth for completion: in fix mode, don't trust the agent's
     # EXIT_SIGNAL while REVIEW_FINDINGS.md still has unchecked findings
     if [[ "$MODE" == "fix" ]] && [[ -f "$PROJECT_DIR/REVIEW_FINDINGS.md" ]]; then
         export COMPLETION_GROUND_TRUTH="$PROJECT_DIR/REVIEW_FINDINGS.md"
     else
         unset COMPLETION_GROUND_TRUTH
     fi
+    return 0
 }
 
 # Get the model for the current mode
@@ -294,12 +299,21 @@ ensure_goodbunny_dirs() {
 # Maximum iterations before stopping
 # MAX_ITERATIONS=30
 
-# Models (use aliases: opus, sonnet, or full model names)
+# Agent CLI: claude (default), codex, or opencode. Also --harness / GOODBUNNY_HARNESS.
+# HARNESS=claude
+
+# Models per mode. Defaults depend on the harness:
+#   claude:   audit=opus         fix=sonnet       analyze=opus
+#   codex:    audit=gpt-6-astra  fix=gpt-5.6-sol  analyze=gpt-6-astra
+#   opencode: whatever your opencode.json "model" says (use provider/model here)
 # MODEL_AUDIT="opus"
 # MODEL_FIX="sonnet"
 # MODEL_ANALYZE="opus"
 
-# Iteration timeout in seconds (kills Claude if it hangs)
+# Reasoning effort for harnesses that support it (codex: low..max, opencode: --variant)
+# REASONING_EFFORT=high
+
+# Iteration timeout in seconds (kills the agent if it hangs)
 # ITERATION_TIMEOUT=900
 
 # Circuit breaker thresholds
@@ -484,7 +498,8 @@ COMMANDS:
 
 OPTIONS:
     --max-iterations N    Maximum iterations (default: 30)
-    --model MODEL         Override model for this run
+    --harness NAME        Agent CLI to run: claude (default), codex, opencode
+    --model MODEL         Override model for this run (must fit the harness)
     --categories LIST     Comma-separated categories to review
                           (security,architecture,complexity,dry,kiss,
                            dependencies,error-handling,testing,
@@ -592,6 +607,10 @@ autonomously. No setup required — just point it at your project.
   goodbunny status                   Show review progress
   goodbunny reset                    Reset circuit breaker (if stuck)
 
+  Any command accepts --harness claude|codex|opencode (default: claude).
+  Codex defaults to gpt-6-astra for audit/analyze and gpt-5.6-sol for fix;
+  OpenCode uses the model configured in your opencode.json.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -620,8 +639,8 @@ init_goodbunny() {
     # Ensure .goodbunny/ exists (auto-create on first run)
     ensure_goodbunny_dirs
 
-    # Load configuration
-    load_goodbunny_config
+    # Load configuration (resolves the harness, then harness-aware model defaults)
+    load_goodbunny_config || exit 1
 
     # Check dependencies
     if ! check_dependencies; then
@@ -638,6 +657,7 @@ init_goodbunny() {
 
     log_info "Good Bunny starting"
     log_info "Mode: $MODE"
+    log_info "Harness: $(harness_display_name) ($HARNESS)"
     log_info "Max iterations: $MAX_ITERATIONS"
     if [[ -n "$CATEGORIES_FILTER" ]]; then
         log_info "Categories: $CATEGORIES_FILTER"
@@ -654,9 +674,9 @@ main() {
 
     init_goodbunny
 
-    # Run main loop
-    main_loop
-    local exit_code=$?
+    # Run main loop (capture the status without tripping errexit)
+    local exit_code=0
+    main_loop || exit_code=$?
 
     # Summary
     echo ""
