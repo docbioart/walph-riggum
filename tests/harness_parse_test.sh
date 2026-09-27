@@ -198,5 +198,109 @@ M=""; harness_resolve_model M build "gpt-5.6-terra" "" >/dev/null; assert_eq "mo
 HARNESS=opencode; M=""; harness_resolve_model M plan "" "" >/dev/null; assert_eq "model: opencode default is the harness's own" "" "$M"
 HARNESS=claude; M=""; harness_resolve_model M verify "" "" >/dev/null; assert_eq "model: claude verify default" opus "$M"
 
+# ---------------------------------------------------------------- empty and oversized streams
+for h in codex opencode; do
+    HARNESS=$h; rc=0
+    harness_parse_result "$EMPTY" "$EMPTY" "" || rc=$?
+    assert_eq "$h: empty stdout parses without a shell error" 0 "$rc"
+    assert_eq "$h: empty stdout gives no response" false "$HARNESS_TEXT_OK"
+    assert_eq "$h: empty stdout counts no malformed lines" 0 "$HARNESS_MALFORMED_LINES"
+done
+assert_eq "line count: empty file" 0 "$(_harness_count_lines "$EMPTY")"
+assert_eq "line count: missing file" 0 "$(_harness_count_lines "$TMP/does-not-exist")"
+
+# a stream padded with big tool-output events still yields the same result
+BIG="$TMP/codex-big.jsonl"
+{
+    head -2 "$FIX/codex-ok.jsonl"
+    pad=$(printf 'x%.0s' $(seq 1 2000))
+    for i in $(seq 1 300); do
+        printf '{"type":"item.completed","item":{"id":"cmd_%s","type":"command_execution","aggregated_output":"%s"}}\n' "$i" "$pad"
+    done
+    tail -n +3 "$FIX/codex-ok.jsonl"
+} > "$BIG"
+HARNESS=codex
+harness_parse_result "$FIX/codex-ok.jsonl" "$EMPTY" ""; want_text="$HARNESS_TEXT"; want_tokens="$HARNESS_TOKENS_IN/$HARNESS_TOKENS_OUT"
+harness_parse_result "$BIG" "$EMPTY" ""
+assert_eq "codex: padded stream, same final text" "$want_text" "$HARNESS_TEXT"
+assert_eq "codex: padded stream, same tokens" "$want_tokens" "$HARNESS_TOKENS_IN/$HARNESS_TOKENS_OUT"
+assert_eq "codex: padded stream, nothing malformed" 0 "$HARNESS_MALFORMED_LINES"
+assert_eq "codex: padded stream, usage complete" true "$HARNESS_USAGE_COMPLETE"
+
+# one broken line in the middle is counted, the rest still parses
+BROKEN="$TMP/opencode-broken.jsonl"
+{ head -2 "$FIX/opencode-ok.jsonl"; printf '{"type":"text","part":{"te\n'; tail -n +3 "$FIX/opencode-ok.jsonl"; } > "$BROKEN"
+HARNESS=opencode
+harness_parse_result "$FIX/opencode-ok.jsonl" "$EMPTY" ""; want_text="$HARNESS_TEXT"; want_complete="$HARNESS_USAGE_COMPLETE"
+harness_parse_result "$BROKEN" "$EMPTY" ""
+assert_eq "opencode: one malformed line counted" 1 "$HARNESS_MALFORMED_LINES"
+assert_eq "opencode: text survives a malformed line" "$want_text" "$HARNESS_TEXT"
+assert_eq "opencode: completeness unchanged" "$want_complete" "$HARNESS_USAGE_COMPLETE"
+
+# the final response is capped to its tail, where the status block lives
+HARNESS=claude
+LONG="$TMP/claude-long.json"
+jq -n --arg t "$(printf 'y%.0s' $(seq 1 5000))
+RALPH_STATUS
+completion_level: HIGH
+tasks_remaining: 0
+current_task: none
+EXIT_SIGNAL: true
+RALPH_STATUS_END" '{type:"result",subtype:"success",is_error:false,result:$t,total_cost_usd:0.01,usage:{input_tokens:1,output_tokens:1}}' > "$LONG"
+WALPH_OUTPUT_CAP=1000 harness_parse_result "$LONG" "$EMPTY" ""
+assert_eq "cap: text limited to WALPH_OUTPUT_CAP" 1000 "${#HARNESS_TEXT}"
+rc=0; check_completion "$HARNESS_TEXT" || rc=$?
+assert_eq "cap: status block at the end still read" 0 "$rc"
+harness_parse_result "$LONG" "$EMPTY" ""
+assert_eq "cap: default leaves a short response whole" true "$([[ ${#HARNESS_TEXT} -gt 5000 ]] && echo true || echo false)"
+
+# ---------------------------------------------------------------- stderr: what counts as an error
+HARNESS=claude
+ERRF="$TMP/stderr.txt"
+stderr_errors() { printf '%s\n' "$1" > "$ERRF"; harness_parse_result "$FIX/claude-ok.json" "$ERRF" ""; printf '%s' "$HARNESS_ERRORS"; }
+assert_eq "stderr: port number containing 429 ignored" "" "$(stderr_errors 'warning: mcp server listening on port 9429')"
+assert_eq "stderr: 'error' and 'quota' mid-line ignored" "" "$(stderr_errors 'DVTDeviceOperation: error: unable to write cache quota file')"
+assert_eq "stderr: deprecation warning ignored" "" "$(stderr_errors 'warning: --foo is deprecated')"
+assert_contains "stderr: line starting with Error kept" "$(stderr_errors 'Error: something broke')" "something broke"
+assert_contains "stderr: ERROR log level kept" "$(stderr_errors '2026-09-27T10:00:00 ERROR codex_core: stream closed')" "stream closed"
+assert_contains "stderr: HTTP 429 kept" "$(stderr_errors 'request failed with status 429')" "429"
+assert_contains "stderr: quota exceeded kept" "$(stderr_errors 'You exceeded your current quota')" "quota"
+assert_contains "stderr: connection refused kept" "$(stderr_errors 'connect ECONNREFUSED 127.0.0.1:443')" "ECONNREFUSED"
+assert_contains "stderr: fetch failed kept" "$(stderr_errors 'TypeError: fetch failed')" "fetch failed"
+
+# ---------------------------------------------------------------- error classification
+rl() { local rc=0; check_rate_limit "$1" || rc=$?; echo "$rc"; }
+cn() { local rc=0; check_connection_error "$1" || rc=$?; echo "$rc"; }
+assert_eq "rate limit: weekly cap wording" 0 "$(rl "claude: success: You've hit your weekly limit · resets 1pm")"
+assert_eq "rate limit: usage limit wording" 0 "$(rl 'You have hit your usage limit')"
+assert_eq "rate limit: HTTP 429" 0 "$(rl 'API Error: 429 rate_limit_error')"
+assert_eq "rate limit: quota exceeded" 0 "$(rl 'insufficient_quota: You exceeded your current quota')"
+assert_eq "rate limit: a port number is not a 429" 1 "$(rl 'listening on port 9429')"
+assert_eq "rate limit: the word quota alone is not a cap" 1 "$(rl 'unable to write cache quota file')"
+assert_eq "rate limit: empty" 1 "$(rl '')"
+assert_eq "connection: ECONNREFUSED" 0 "$(cn 'connect ECONNREFUSED 127.0.0.1:443')"
+assert_eq "connection: DNS failure" 0 "$(cn 'getaddrinfo ENOTFOUND api.anthropic.com')"
+assert_eq "connection: a rate limit is not an outage" 1 "$(cn 'API Error: 429 rate_limit_error')"
+assert_eq "connection: empty" 1 "$(cn '')"
+
+# a claude result that reports the cap as an error reaches the rate-limit check
+CAPPED="$TMP/claude-capped.json"
+jq -n --arg t "You've hit your weekly limit · resets 1pm" '{type:"result",subtype:"success",is_error:true,result:$t,total_cost_usd:0,usage:{input_tokens:0,output_tokens:0}}' > "$CAPPED"
+HARNESS=claude; harness_parse_result "$CAPPED" "$EMPTY" ""
+assert_eq "claude: weekly cap result is classified as a rate limit" 0 "$(rl "$HARNESS_ERRORS")"
+
+# ---------------------------------------------------------------- config values
+source "$ROOT/lib/config.sh"
+CFG="$TMP/config"
+printf 'ITERATION_TIMEOUT=900  # 15 minutes\nMODEL_PLAN="opus"   # quoted, with a comment\nMODEL_BUILD=sonnet\nLOG_DIR="build #1"\nMAX_ITERATIONS=lots\nNOT_ALLOWED=1\n' > "$CFG"
+ITERATION_TIMEOUT=""; MODEL_PLAN=""; MODEL_BUILD=""; LOG_DIR=""; MAX_ITERATIONS=50; NOT_ALLOWED=""
+load_config_file "$CFG" "$WALPH_CONFIG_KEYS" >/dev/null 2>&1
+assert_eq "config: inline comment stripped from a number" 900 "$ITERATION_TIMEOUT"
+assert_eq "config: quotes and comment stripped" opus "$MODEL_PLAN"
+assert_eq "config: bare value" sonnet "$MODEL_BUILD"
+assert_eq "config: # inside quotes is data" "build #1" "$LOG_DIR"
+assert_eq "config: non-integer ignored, previous value kept" 50 "$MAX_ITERATIONS"
+assert_eq "config: unknown key ignored" "" "$NOT_ALLOWED"
+
 echo "harness_parse_test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

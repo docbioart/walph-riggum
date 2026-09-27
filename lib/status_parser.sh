@@ -40,7 +40,15 @@ parse_status_field() {
     local block="$1"
     local field="$2"
 
-    printf '%s\n' "$block" | grep "^${field}:" | head -1 | sed "s/^${field}:[[:space:]]*//" | tr -d '\r'
+    # awk (first match, then keep reading), not grep|head: head closing the
+    # pipe early can SIGPIPE grep, and under pipefail that 141 aborts callers
+    printf '%s\n' "$block" | awk -v f="$field" '
+        index($0, f ":") == 1 && !found {
+            found = 1
+            line = substr($0, length(f) + 2)
+            sub(/^[[:space:]]*/, "", line)
+            print line
+        }' | tr -d '\r'
 }
 
 # Check if output indicates completion (dual-gate check)
@@ -109,10 +117,22 @@ check_rate_limit() {
     local errors="$1"
     [[ -z "$errors" ]] && return 1
 
-    if printf '%s\n' "$errors" | grep -qiE 'rate.?limit|rate_limit_error|(^|[^0-9])429([^0-9]|$)|usage limit|your limit will reset|quota'; then
+    # "hit your … limit" is Claude Code's cap wording ("You've hit your weekly
+    # limit · resets 1pm"): on 2026-08-31 an overnight run burned three empty
+    # iterations into the breaker because nothing matched it.
+    if printf '%s\n' "$errors" | grep -qiE 'rate.?limit|rate_limit_error|(^|[^0-9])429([^0-9]|$)|usage limit|your limit will reset|hit your (weekly |usage |daily |session )?limit|quota (exceeded|reached)|exceeded[a-z ]* quota|insufficient_quota'; then
         return 0
     fi
     return 1
+}
+
+# Check for a network/connection-level failure. Distinct from rate limits and
+# server errors: these mean the network is down, not that the agent is stuck,
+# so the loop pauses and retries instead of feeding the circuit breaker.
+check_connection_error() {
+    local errors="$1"
+    [[ -z "$errors" ]] && return 1
+    printf '%s\n' "$errors" | grep -qiE 'ECONNRESET|ECONNREFUSED|ConnectionRefused|Connection dropped|Connection refused|Unable to connect|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|fetch failed|network is unreachable|CERTIFICATE_VERIFICATION_ERROR'
 }
 
 # Check for a server-side API error (5xx, overloaded, failed turn)

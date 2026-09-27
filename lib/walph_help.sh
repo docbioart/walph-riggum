@@ -62,6 +62,7 @@ with --harness.
   walph build [options]         Build from implementation plan
     --max-iterations N          Limit iterations (default: 50)
     --model <name>              Override model (default: sonnet)
+    --timeout SECONDS           Per-iteration timeout (default: 900)
     --fast                      Enable Claude fast mode (2.5x faster, higher cost)
     --monitor                   Enable tmux monitoring view
 
@@ -74,6 +75,9 @@ with --harness.
                                 Second model reviews IMPLEMENTATION_PLAN.md,
                                 then the planner reconciles its findings
                                 (also: walph plan --reviewer codex:gpt-6-astra)
+
+  walph recover                 Review tasks left unverified by timed-out
+                                iterations, then rebuild ONLY those tasks
 
   walph status                  Show current progress
   walph reset                   Reset circuit breaker (if stuck)
@@ -187,6 +191,8 @@ COMMANDS:
                       (chains into verify automatically on completion)
     verify            Verify implementation against spec acceptance criteria
     review-plan       Second model reviews the plan, planner reconciles (needs --reviewer)
+    recover           Review tasks left unverified by timed-out iterations,
+                      then rebuild only those tasks
     status            Show current state and progress
     reset             Reset circuit breaker and state
 
@@ -196,6 +202,7 @@ OPTIONS:
     --model MODEL         Override model for this run (must fit the harness)
     --reviewer SPEC       Second-model plan review: <harness>[:<model>],
                           e.g. codex:gpt-6-astra or claude:opus (no default)
+    --timeout SECONDS     Per-iteration timeout in seconds (default: 900)
     --fast                Enable Claude fast mode (2.5x faster, higher cost; Claude only)
     --monitor             Enable tmux monitoring view
     --dry-run             Show what would be run without executing
@@ -216,6 +223,8 @@ EXAMPLES:
     walph.sh plan --reviewer codex:gpt-6-astra   # ...and have Codex Astra review it
     walph.sh build --max-iterations 10   # Build with limited iterations
     walph.sh build --harness codex       # Build on Codex instead of Claude Code
+    walph.sh build --timeout 1800        # Allow 30 minutes per iteration
+    walph.sh recover                     # Rebuild tasks interrupted by timeouts
     walph.sh status                      # Check current progress
 
 WORKFLOW (new project):

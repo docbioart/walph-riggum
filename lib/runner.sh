@@ -7,7 +7,8 @@
 # This library provides a unified iteration runner that handles:
 # - Prompt template loading and variable substitution
 # - One bounded agent invocation via the harness layer (lib/harness.sh)
-# - Rate limit and API error detection on the harness's error channel
+# - Rate limit, network outage and API error detection on the harness's
+#   error channel
 # - Circuit breaker updates and the explicit stuck signal
 # - Completion detection (exit code + final response + status block +
 #   ground-truth checkboxes)
@@ -112,6 +113,7 @@ _write_last_iteration_note() {
     local status_summary="$3"
     local error_msg="$4"
     local outcome="$5"   # ok | timeout | exit:<code> | no-response
+    local extra_detail="${6:-}"
 
     local note_file="$PROJECT_DIR/$state_dir/last_iteration_note"
     {
@@ -131,6 +133,9 @@ _write_last_iteration_note() {
                 echo "The agent produced no final response — treat its work as unverified. Reconcile the working tree first."
                 ;;
         esac
+        if [[ -n "$extra_detail" ]]; then
+            echo "$extra_detail"
+        fi
     } > "$note_file" 2>/dev/null || true
 }
 
@@ -184,12 +189,12 @@ render_prompt_template() {
 #   $5: callback function name for additional template substitutions (optional)
 #   $6: dry run extra info callback function name (optional)
 #
-# Returns:
+# Returns (the agent's raw exit code never leaks out: 2 and 4 mean something
+# to run_main_loop, and agent CLIs use those codes too):
 #   0: success
-#   1: error (including an explicit stuck signal)
+#   1: error — nonzero agent exit, timeout, or an explicit stuck signal
 #   2: user requested exit (from rate limit handler)
-#   124: agent timed out
-#   other: the agent process's exit code
+#   4: network outage — connectivity has returned; retry the same iteration
 run_shared_iteration() {
     local iteration="$1"
     local prompt_file="$2"
@@ -233,6 +238,14 @@ run_shared_iteration() {
     local timeout="${ITERATION_TIMEOUT:-900}"
     log_info "Running $(harness_display_name) (${model:-harness default})... (timeout: ${timeout}s)"
 
+    # Snapshot the plan's checked-off tasks so that if this iteration is
+    # killed by the timeout, any boxes it checked can be flagged as
+    # unverified for the next iteration (and for 'walph recover').
+    local pre_checked=""
+    if [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] && [[ -f "${COMPLETION_GROUND_TRUTH:-}" ]]; then
+        pre_checked=$(grep -E '^[[:space:]]*- \[x\]' "$COMPLETION_GROUND_TRUTH" 2>/dev/null || true)
+    fi
+
     local temp_prompt temp_output temp_err temp_final
     new_runner_temp temp_prompt
     new_runner_temp temp_output
@@ -268,7 +281,7 @@ run_shared_iteration() {
         outcome="timeout"
         log_error "Iteration timed out after ${timeout}s"
         log_info "The agent may have stalled on an API call or long-running task"
-        log_info "The next iteration will retry. Adjust ITERATION_TIMEOUT in config if needed."
+        log_info "The next iteration will retry. Raise the limit with --timeout SECONDS (or ITERATION_TIMEOUT in config)."
     elif [[ $exit_code -ne 0 ]]; then
         outcome="exit:$exit_code"
         log_error "$(harness_display_name) exited with code $exit_code"
@@ -294,6 +307,19 @@ run_shared_iteration() {
         fi
     fi
 
+    # Network outage: a connection-level failure is not the agent being stuck.
+    # Don't count it toward the circuit breaker — pause until connectivity
+    # returns, then have the main loop retry this same iteration (return 4).
+    if [[ "$outcome" != "ok" ]] && check_connection_error "$HARNESS_ERRORS"; then
+        log_warn "$(harness_display_name) could not reach the API (network down?) — pausing until connectivity returns"
+        if wait_for_connectivity; then
+            log_info "Connectivity restored — will retry iteration $iteration"
+            return 4
+        fi
+        log_error "Still offline after the maximum wait (WALPH_OFFLINE_MAX_WAIT) — giving up on this iteration"
+        return 1
+    fi
+
     if check_api_error "$HARNESS_ERRORS"; then
         log_error "API error detected"
     fi
@@ -311,8 +337,35 @@ run_shared_iteration() {
         stuck=true
     fi
 
+    # A killed iteration may have checked off tasks it never finished, and
+    # usually leaves uncommitted work. Give the next iteration the specifics
+    # so it verifies that work instead of trusting or discarding it.
+    local timeout_detail=""
+    if [[ "$outcome" == "timeout" ]]; then
+        if [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] && [[ -f "${COMPLETION_GROUND_TRUTH:-}" ]]; then
+            local post_checked newly_checked
+            post_checked=$(grep -E '^[[:space:]]*- \[x\]' "$COMPLETION_GROUND_TRUTH" 2>/dev/null || true)
+            newly_checked=$(comm -13 <(printf '%s\n' "$pre_checked" | sort) <(printf '%s\n' "$post_checked" | sort) 2>/dev/null || true)
+            if [[ -n "$newly_checked" ]]; then
+                timeout_detail+="Tasks checked off DURING the killed iteration — treat as UNVERIFIED. Re-run each one's 'Done when' criterion; uncheck any that fail before starting new work:"$'\n'"$newly_checked"$'\n'
+                # Persist for 'walph recover': plain task text, deduplicated,
+                # accumulated across timeouts until recovered or completed
+                local rec_file="$PROJECT_DIR/$state_dir/unverified_tasks"
+                {
+                    [[ -f "$rec_file" ]] && cat "$rec_file"
+                    printf '%s\n' "$newly_checked" | sed -E 's/^[[:space:]]*- \[x\] //'
+                } | awk 'NF && !seen[$0]++' > "${rec_file}.tmp" && mv "${rec_file}.tmp" "$rec_file"
+            fi
+        fi
+        local dirty_files
+        dirty_files=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -10 || true)
+        if [[ -n "$dirty_files" ]]; then
+            timeout_detail+="Uncommitted changes left in the working tree:"$'\n'"$dirty_files"
+        fi
+    fi
+
     # Leave a short handoff note for the next (fresh-context) iteration
-    _write_last_iteration_note "$state_dir" "$iteration" "$status_summary" "$error_msg" "$outcome"
+    _write_last_iteration_note "$state_dir" "$iteration" "$status_summary" "$error_msg" "$outcome" "$timeout_detail"
 
     # Record cost/duration/outcome for this iteration
     local duration=$(( $(date +%s) - iteration_start_ts ))
@@ -334,6 +387,17 @@ run_shared_iteration() {
     if check_completion "$HARNESS_TEXT"; then
         if [[ "$outcome" != "ok" ]]; then
             log_warn "Completion signal ignored: iteration outcome was '$outcome'"
+        elif [[ -n "${WALPH_RECOVERY_TASKS_FILE:-}" ]]; then
+            # Recovery run: only the recovery tasks gate completion — the
+            # rest of the plan is deliberately out of scope
+            if declare -f has_unchecked_recovery_tasks > /dev/null 2>&1 \
+                && has_unchecked_recovery_tasks "${COMPLETION_GROUND_TRUTH:-$PROJECT_DIR/IMPLEMENTATION_PLAN.md}" "$WALPH_RECOVERY_TASKS_FILE"; then
+                log_warn "Agent signaled completion, but recovery tasks remain unchecked — ignoring the exit signal and continuing"
+            else
+                log_success "Completion signal received!"
+                touch "$PROJECT_DIR/$state_dir/completion_signal"
+                return 0
+            fi
         elif [[ -n "${COMPLETION_GROUND_TRUTH:-}" ]] \
             && declare -f has_unchecked_boxes > /dev/null 2>&1 \
             && has_unchecked_boxes "$COMPLETION_GROUND_TRUTH"; then
@@ -346,7 +410,14 @@ run_shared_iteration() {
         fi
     fi
 
-    return "$exit_code"
+    # Normalize to 0/1. The agent's raw exit code must not leak out: 2 is
+    # reserved for the rate-limit handler's "exit and resume" choice and 4
+    # for the network retry, and agent CLIs exit with those codes themselves
+    # (Claude Code exits 2 on a usage error).
+    if [[ "$outcome" == "ok" ]] || [[ "$outcome" == "no-response" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 # Run the main autonomous loop
@@ -372,6 +443,7 @@ run_main_loop() {
     clear_loop_signals "$state_dir"
 
     local iteration=1
+    local net_retry_count=0
 
     while [[ $iteration -le $MAX_ITERATIONS ]]; do
         # Check circuit breaker before iteration
@@ -407,19 +479,36 @@ run_main_loop() {
         WALPH_CURRENT_ITERATION="$iteration"
         local result=0
         run_iteration "$iteration" "$prompt_file" "$model" || result=$?
+
+        # Network-outage retry: connectivity is back — rerun the SAME
+        # iteration without burning the counter or the circuit breaker.
+        # The consecutive cap guards against a reachable-but-broken API.
+        if [[ $result -eq 4 ]]; then
+            net_retry_count=$((net_retry_count + 1))
+            if [[ $net_retry_count -le 8 ]]; then
+                log_info "Retrying iteration $iteration after connectivity pause (retry $net_retry_count)"
+                continue
+            fi
+            log_warn "Connectivity keeps failing mid-request — counting as a failed iteration"
+            result=1
+        else
+            net_retry_count=0
+        fi
+
         if [[ $result -eq 0 ]]; then
             log_success "Iteration $iteration completed successfully"
         elif [[ $result -eq 2 ]]; then
             log_info "Exit requested by user"
             return 0
         else
-            log_warn "Iteration $iteration completed with issues (code $result)"
+            log_warn "Iteration $iteration completed with issues"
         fi
 
         # Explicit stuck signal from the agent
         if [[ -f "$PROJECT_DIR/$state_dir/stuck_signal" ]]; then
             clear_loop_signals "$state_dir"
             log_error "The agent signaled it is stuck — stopping loop (see its explanation above)"
+            log_info "Run '$tool_name reset' to clear state, then refine the specs/plan"
             return 1
         fi
 

@@ -67,11 +67,12 @@ _working_tree_sig() {
     {
         git status --porcelain 2>/dev/null | grep -v '\.walph/state/\|\.goodbunny/state/' || true
         git diff 2>/dev/null || true
+        # --stdin-paths: ONE git process for all untracked files. The
+        # per-file loop this replaces forked git once per file and wedged
+        # startup for hours when an iteration dumped 177k scratch artifacts.
         git ls-files --others --exclude-standard 2>/dev/null \
             | grep -v '\.walph/state/\|\.goodbunny/state/' \
-            | while IFS= read -r f; do
-                [[ -f "$f" ]] && git hash-object "$f" 2>/dev/null
-              done || true
+            | git hash-object --stdin-paths 2>/dev/null || true
     } | git hash-object --stdin 2>/dev/null || echo "no-git"
 }
 
@@ -181,7 +182,9 @@ update_circuit_breaker() {
         no_change_count=0
         log_debug "File changes detected, reset no_change_count"
     else
-        ((no_change_count++))
+        # $((x + 1)) not ((x++)): post-increment from 0 returns status 1,
+        # which is fatal under set -e on bash >= 4.1
+        no_change_count=$((no_change_count + 1))
         log_debug "No file changes, no_change_count=$no_change_count"
     fi
     _update_state "no_change_count" "$no_change_count" "true"
@@ -189,7 +192,7 @@ update_circuit_breaker() {
     # Check error patterns
     if [[ -n "$error_output" ]]; then
         if check_error_pattern "$error_output"; then
-            ((same_error_count++))
+            same_error_count=$((same_error_count + 1))
             log_debug "Same error repeated, same_error_count=$same_error_count"
         else
             same_error_count=1
@@ -209,7 +212,7 @@ update_circuit_breaker() {
         _update_state "last_git_hash" "$current_hash"
         log_debug "New commit detected, reset no_commit_count"
     else
-        ((no_commit_count++))
+        no_commit_count=$((no_commit_count + 1))
         log_debug "No new commit, no_commit_count=$no_commit_count"
     fi
     _update_state "no_commit_count" "$no_commit_count" "true"

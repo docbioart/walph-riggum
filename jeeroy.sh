@@ -33,19 +33,14 @@ source "$SCRIPT_DIR/lib/plan_review.sh"   # parse_reviewer_spec / check_reviewer
 # TEMP FILE CLEANUP
 # ============================================================================
 
-JEEROY_TEMP_FILES=""
+# Arrays (not space-joined strings): a project dir with spaces would
+# word-split in the cleanup loop and rm the wrong path
+JEEROY_TEMP_FILES=()
 
 cleanup_temp_files() {
-    if [[ -n "$JEEROY_TEMP_FILES" ]]; then
-        for f in $JEEROY_TEMP_FILES; do
-            rm -f "$f" 2>/dev/null
-        done
-    fi
-    # Also clean up any temp directories from converter.sh
-    if [[ -n "${_CONVERTER_TEMP_DIRS:-}" ]]; then
-        for d in $_CONVERTER_TEMP_DIRS; do
-            rm -rf "$d" 2>/dev/null
-        done
+    if [[ ${#JEEROY_TEMP_FILES[@]} -gt 0 ]]; then
+        rm -f -- "${JEEROY_TEMP_FILES[@]}" 2>/dev/null || true
+        JEEROY_TEMP_FILES=()
     fi
 }
 
@@ -67,8 +62,13 @@ make_temp() {
     local var_name="$1"
     local tmp
     tmp=$(mktemp)
-    JEEROY_TEMP_FILES="$JEEROY_TEMP_FILES $tmp"
+    JEEROY_TEMP_FILES+=("$tmp")
     eval "$var_name=\"\$tmp\""
+}
+
+# Track an existing path for cleanup (e.g. the Q&A context file)
+track_temp_file() {
+    JEEROY_TEMP_FILES+=("$1")
 }
 
 # ============================================================================
@@ -140,7 +140,7 @@ EXAMPLES:
 SUPPORTED FORMATS:
     Direct read:    .md, .txt
     Via pandoc:     .docx, .doc, .pptx, .ppt, .rtf, .html, .odt, .epub
-    PDF:            .pdf (pandoc or pdftotext)
+    PDF:            .pdf (pdftotext — brew install poppler)
     Images:         .jpg, .jpeg, .png, .gif, .webp, .svg (file reference)
     Code/Config:    .js, .ts, .py, .rb, .go, .rs, .json, .yaml, etc.
     Archives:       .zip (extract and process contents)
@@ -333,7 +333,14 @@ validate_environment() {
     # Check pandoc (warn but don't fail - some files may be .md/.txt only)
     if ! check_pandoc 2>/dev/null; then
         log_warn "pandoc not installed - only .md and .txt files will be processed"
-        echo "  Install pandoc for docx/pptx/pdf/etc support"
+        echo "  Install pandoc for docx/pptx/html/etc support"
+    fi
+
+    # Check pdftotext separately: pandoc cannot read PDFs, so without
+    # pdftotext every PDF silently becomes '[could not be converted]'
+    if ! check_pdftotext 2>/dev/null; then
+        log_warn "pdftotext not installed - PDF files cannot be converted"
+        echo "  Install it for PDF support: brew install poppler"
     fi
 
     # Check chrome-devtools MCP for the selected harness (warn but don't fail)
@@ -349,16 +356,18 @@ validate_environment() {
 # DOCUMENT PROCESSING
 # ============================================================================
 
-# Count supported files in the docs directory
+# Count supported files in the docs directory.
+# Uses find (like convert_directory does) so the count and the conversion
+# agree on dotfiles — a glob would skip hidden files the converter processes.
 count_supported_files() {
     local dir="$1"
     local count=0
-    for file in "$dir"/*; do
-        [[ -f "$file" ]] || continue
+    local file
+    while IFS= read -r -d '' file; do
         if is_supported_file "$file"; then
             count=$((count + 1))
         fi
-    done
+    done < <(find "$dir" -maxdepth 1 -type f -print0 2>/dev/null)
     echo "$count"
 }
 
@@ -404,13 +413,22 @@ load_prompt_template() {
 # ANALYSIS PHASE (Non-interactive)
 # ============================================================================
 
+# Result of the last run_restricted_call (and of run_analysis /
+# run_direct_generation, which end in one)
+JEEROY_RESULT=""
+
 # Run one non-interactive, restricted (no edits/commands) agent call with the
-# given prompt file. Echoes the final response on success. Returns 1 on any
-# failure after logging it (rate limits get the standard resume hint).
+# given prompt file. Stores the final response in JEEROY_RESULT. Returns 1 on
+# any failure after logging it (rate limits get the standard resume hint).
+#
+# Call it directly, never inside $(...): in a subshell the agent's PID and the
+# temp files are registered where the signal handler and the EXIT trap cannot
+# see them, so Ctrl-C would leave the agent running with nothing to stop it.
 run_restricted_call() {
     local prompt_file="$1"
     local what="$2"
 
+    JEEROY_RESULT=""
     local temp_output temp_err temp_final
     make_temp temp_output
     make_temp temp_err
@@ -442,7 +460,8 @@ run_restricted_call() {
     fi
 
     log_debug "$what: $(harness_usage_summary)" >&2
-    printf '%s\n' "$HARNESS_TEXT"
+    JEEROY_RESULT="$HARNESS_TEXT"
+    return 0
 }
 
 run_analysis() {
@@ -497,7 +516,7 @@ run_qa_session() {
     # Write full context to a file Claude can read
     local context_file="$PROJECT_DIR/.jeeroy_context.md"
     # Track temp file for cleanup on interrupt
-    JEEROY_TEMP_FILES="$JEEROY_TEMP_FILES $context_file"
+    track_temp_file "$context_file"
     {
         printf '%s\n' "$prompt"
         printf '\n---\n\n# Target Directory\n\n'
@@ -576,10 +595,12 @@ extract_and_write_specs() {
     local existing_specs
     existing_specs=$(find "$specs_dir" -maxdepth 1 -name "*.md" -not -name "README.md" -not -name "TEMPLATE.md" 2>/dev/null | wc -l | tr -d ' ')
 
+    local keep_existing=false
     if [[ "$existing_specs" -gt 0 ]] && [[ "$LFG_MODE" != "true" ]]; then
         log_warn "specs/ directory already contains $existing_specs spec file(s)." >&2
         if ! ask_yes_no "Overwrite existing specs?"; then
-            log_info "Keeping existing specs. New specs will be added alongside them." >&2
+            log_info "Keeping existing specs — new specs with colliding filenames will be skipped." >&2
+            keep_existing=true
         fi
     fi
 
@@ -593,8 +614,9 @@ extract_and_write_specs() {
         if [[ "$line" =~ ^===SPEC_FILE:\ (.+)=== ]]; then
             # If we were already in a spec, write the previous one
             if [[ "$in_spec" == "true" ]] && [[ -n "$current_filename" ]]; then
-                write_spec_file "$specs_dir" "$current_filename" "$current_content"
-                spec_count=$((spec_count + 1))
+                WRITE_SPEC_SKIPPED=false
+                write_spec_file "$specs_dir" "$current_filename" "$current_content" "$keep_existing"
+                [[ "$WRITE_SPEC_SKIPPED" == "true" ]] || spec_count=$((spec_count + 1))
             fi
 
             current_filename="${BASH_REMATCH[1]}"
@@ -608,8 +630,9 @@ extract_and_write_specs() {
         # Check for spec file end
         if [[ "$line" == "===SPEC_FILE_END===" ]]; then
             if [[ "$in_spec" == "true" ]] && [[ -n "$current_filename" ]]; then
-                write_spec_file "$specs_dir" "$current_filename" "$current_content"
-                spec_count=$((spec_count + 1))
+                WRITE_SPEC_SKIPPED=false
+                write_spec_file "$specs_dir" "$current_filename" "$current_content" "$keep_existing"
+                [[ "$WRITE_SPEC_SKIPPED" == "true" ]] || spec_count=$((spec_count + 1))
             fi
             in_spec=false
             current_filename=""
@@ -630,8 +653,9 @@ $line"
 
     # Handle case where last spec wasn't closed with END marker
     if [[ "$in_spec" == "true" ]] && [[ -n "$current_filename" ]]; then
-        write_spec_file "$specs_dir" "$current_filename" "$current_content"
-        spec_count=$((spec_count + 1))
+        WRITE_SPEC_SKIPPED=false
+        write_spec_file "$specs_dir" "$current_filename" "$current_content" "$keep_existing"
+        [[ "$WRITE_SPEC_SKIPPED" == "true" ]] || spec_count=$((spec_count + 1))
     fi
 
     echo "$spec_count"
@@ -643,6 +667,7 @@ write_spec_file() {
     local specs_dir="$1"
     local filename="$2"
     local content="$3"
+    local keep_existing="${4:-false}"
 
     # Sanitize filename: strip path, keep only safe chars
     filename=$(basename "$filename")
@@ -656,29 +681,15 @@ write_spec_file() {
 
     local filepath="$specs_dir/$filename"
 
-    printf '%s\n' "$content" > "$filepath"
-    log_success "Created spec: specs/$filename" >&2
-}
-
-# Parse the completion signal
-parse_completion_signal() {
-    local output="$1"
-
-    local block
-    block=$(printf '%s\n' "$output" | sed -n '/===JEEROY_COMPLETE===/,/===JEEROY_COMPLETE_END===/p')
-
-    if [[ -z "$block" ]]; then
-        return 1
+    # Honor the user's "don't overwrite" answer: keep their file, skip ours
+    if [[ "$keep_existing" == "true" ]] && [[ -f "$filepath" ]]; then
+        log_warn "Kept existing spec (skipped generated one): specs/$filename" >&2
+        WRITE_SPEC_SKIPPED=true
+        return 0
     fi
 
-    local specs_count
-    specs_count=$(printf '%s\n' "$block" | grep "^specs_generated:" | sed 's/^specs_generated: *//')
-    local project_type
-    project_type=$(printf '%s\n' "$block" | grep "^project_type:" | sed 's/^project_type: *//')
-    local stack
-    stack=$(printf '%s\n' "$block" | grep "^stack:" | sed 's/^stack: *//')
-
-    echo "$specs_count|$project_type|$stack"
+    printf '%s\n' "$content" > "$filepath"
+    log_success "Created spec: specs/$filename" >&2
 }
 
 # ============================================================================
@@ -702,12 +713,23 @@ run_lfg_pipeline() {
         return 1
     fi
 
-    # Use provided stack or detected stack
-    local stack_flag=""
+    # Use provided stack or detected stack. The detected value comes from
+    # Claude's free-text analysis — validate it's a single clean token before
+    # turning it into a CLI flag ("node + react" would word-split into bogus
+    # setup arguments and abort the pipeline).
+    local stack_args=()
+    local stack_choice=""
     if [[ -n "$STACK" ]]; then
-        stack_flag="--stack $STACK"
+        stack_choice="$STACK"
     elif [[ -n "$detected_stack" ]]; then
-        stack_flag="--stack $detected_stack"
+        stack_choice="$detected_stack"
+    fi
+    if [[ -n "$stack_choice" ]]; then
+        if [[ "$stack_choice" =~ ^[a-z][a-z0-9+-]*$ ]]; then
+            stack_args=(--stack "$stack_choice")
+        else
+            log_warn "Ignoring unusable stack suggestion '$stack_choice' — walph setup will auto-detect"
+        fi
     fi
 
     # Step 1: Setup walph in the project
@@ -715,8 +737,7 @@ run_lfg_pipeline() {
         log_info "Step 1/3: Setting up Walph..."
         # WALPH_SETUP_INLINE suppresses the next-steps banner — the pipeline
         # continues into plan/build immediately
-        # shellcheck disable=SC2086
-        (cd "$PROJECT_DIR" && WALPH_SETUP_INLINE=true "$walph_script" setup $stack_flag) || {
+        (cd "$PROJECT_DIR" && WALPH_SETUP_INLINE=true "$walph_script" setup ${stack_args[@]+"${stack_args[@]}"}) || {
             log_error "Walph setup failed. Fix issues and run manually:"
             echo "  cd $PROJECT_DIR && walph setup"
             return 1
@@ -772,11 +793,28 @@ run_lfg_pipeline() {
 
     # Step 3: Run building
     log_info "Step 3/3: Running Walph building..."
-    (cd "$PROJECT_DIR" && "$walph_script" build "${harness_args[@]}") || {
+    local build_rc=0
+    (cd "$PROJECT_DIR" && "$walph_script" build "${harness_args[@]}") || build_rc=$?
+    if [[ $build_rc -eq 3 ]]; then
+        # walph's "ended without completing" code: max iterations reached or
+        # verification left failing criteria — NOT a finished pipeline
+        log_warn "Build ended without completing — unfinished tasks remain in IMPLEMENTATION_PLAN.md."
+        echo "  Resume with: cd $PROJECT_DIR && walph build --harness $HARNESS"
+        echo "  (After timeouts, 'walph recover --harness $HARNESS' rebuilds just the interrupted tasks.)"
+        return 1
+    elif [[ $build_rc -ne 0 ]]; then
         log_error "Walph building failed. Check logs and resume:"
         echo "  cd $PROJECT_DIR && walph build --harness $HARNESS"
         return 1
-    }
+    fi
+
+    # Ground truth check before declaring victory: the plan's checkboxes,
+    # not walph's exit code, decide whether the pipeline is done
+    if grep -qE '^[[:space:]]*- \[ \]' "$plan_file"; then
+        log_warn "Build exited cleanly but unchecked tasks remain in IMPLEMENTATION_PLAN.md — not declaring the pipeline complete."
+        echo "  Resume with: cd $PROJECT_DIR && walph build"
+        return 1
+    fi
 
     log_success "LFG pipeline complete!"
 }
@@ -862,8 +900,13 @@ main() {
 
     # ── Step 2: Analysis phase ─────────────────────────────────────────────
 
-    local analysis_output
-    analysis_output=$(run_analysis "$converted_content")
+    # || capture: without it, run_analysis returning 1 (e.g. rate limit)
+    # would kill the script via set -e before any error message is shown
+    local analysis_output=""
+    run_analysis "$converted_content" && analysis_output="$JEEROY_RESULT" || {
+        log_error "Analysis failed — see the message above"
+        exit 1
+    }
 
     if [[ -z "$analysis_output" ]]; then
         log_error "Analysis produced no output"
@@ -902,8 +945,11 @@ main() {
 
     if [[ "$SKIP_QA" == "true" ]]; then
         # Non-interactive: Claude outputs with delimiters, we parse and write
-        local generation_output
-        generation_output=$(run_direct_generation "$converted_content" "$analysis_output")
+        local generation_output=""
+        run_direct_generation "$converted_content" "$analysis_output" && generation_output="$JEEROY_RESULT" || {
+            log_error "Spec generation failed — see the message above"
+            exit 1
+        }
 
         if [[ -z "$generation_output" ]]; then
             log_error "Spec generation produced no output"

@@ -107,6 +107,76 @@ check_chrome_mcp() {
 }
 
 # ============================================================================
+# CONNECTIVITY
+# ============================================================================
+
+# Block until the agent's API endpoint is reachable again. Any HTTP response
+# (even 4xx) proves the network path works; curl only fails on
+# connection/DNS/TLS problems. Returns 0 once online, 1 after the maximum
+# wait (WALPH_OFFLINE_MAX_WAIT, default 4 hours — sized for a multi-hour
+# outage).
+wait_for_connectivity() {
+    # Probe the API the current harness talks to (OpenCode's provider is not
+    # knowable from here; set WALPH_CONNECTIVITY_URL for it)
+    local default_url="https://api.anthropic.com/"
+    [[ "${HARNESS:-claude}" == "codex" ]] && default_url="https://api.openai.com/"
+    local probe_url="${WALPH_CONNECTIVITY_URL:-$default_url}"
+    local max_wait="${WALPH_OFFLINE_MAX_WAIT:-14400}"
+    local interval="${WALPH_OFFLINE_RETRY_INTERVAL:-60}"
+    local waited=0
+
+    while ! curl -s -m 10 -o /dev/null "$probe_url"; do
+        if [[ $waited -ge $max_wait ]]; then
+            return 1
+        fi
+        if (( waited % 600 == 0 )); then
+            log_warn "Offline for $((waited / 60)) min — probing every ${interval}s (giving up after $((max_wait / 60)) min)"
+        fi
+        sleep "$interval"
+        waited=$((waited + interval))
+    done
+    return 0
+}
+
+# ============================================================================
+# RUN LOCK
+# ============================================================================
+
+# Refuse to start a second autonomous loop against the same project — two
+# loops mutating one working tree commit torn mixes of each other's edits
+# (observed live on 2026-08-24: three concurrent walph runs during a network
+# outage). noclobber write is the atomic claim; a dead PID means stale lock.
+#
+# Usage: acquire_run_lock <lock_file> <tool_name>
+# Sets RUN_LOCK_FILE on success (caller's EXIT trap must rm it); exits 1 if
+# another live run holds the lock.
+acquire_run_lock() {
+    local lock_file="$1"
+    local tool_name="${2:-walph}"
+
+    if ! ( set -o noclobber; echo "$$" > "$lock_file" ) 2>/dev/null; then
+        local lock_pid
+        lock_pid=$(cat "$lock_file" 2>/dev/null || true)
+        if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+            log_error "Another $tool_name run (PID $lock_pid) is already active in this project"
+            log_info "Two loops mutating one working tree corrupt each other's commits."
+            log_info "Wait for it to finish, or stop it first with: kill $lock_pid"
+            exit 1
+        fi
+        log_warn "Removing stale $tool_name lock (PID ${lock_pid:-unknown} is gone)"
+        echo "$$" > "$lock_file"
+    fi
+    RUN_LOCK_FILE="$lock_file"
+}
+
+release_run_lock() {
+    if [[ -n "${RUN_LOCK_FILE:-}" ]]; then
+        rm -f "$RUN_LOCK_FILE" 2>/dev/null || true
+        RUN_LOCK_FILE=""
+    fi
+}
+
+# ============================================================================
 # FILE UTILITIES
 # ============================================================================
 
@@ -184,7 +254,7 @@ ask_yes_no() {
         case "$answer" in
             [Yy]* ) return 0;;
             [Nn]* ) return 1;;
-            * ) echo "Please answer yes or no.";;
+            * ) echo "Please answer yes or no." >&2;;  # stderr: callers may capture stdout
         esac
     done
 }
@@ -219,9 +289,52 @@ ask_choice() {
 
 # Handle rate limit with user interaction
 # Args: [claude_output] - optional raw output from Claude for detail extraction
+# Seconds until the reset time a Claude Code cap message names ("resets 1pm",
+# "Your limit will reset at 3:30pm"), plus a two-minute grace; empty when the output
+# names no parseable time. Pure-bash clock arithmetic (no GNU/BSD `date -d` split):
+# today's midnight = now minus the H/M/S read from `date`, target = that + the
+# parsed clock time, rolled to tomorrow when already past. Capped at 24h.
+rate_limit_reset_delay() {
+    local output="${1:-}"
+    local hint
+    hint=$(printf '%s\n' "$output" | grep -oiE "reset(s)?( at)? [0-9]{1,2}(:[0-9]{2})? ?(am|pm)" | head -1)
+    [[ -z "$hint" ]] && return 0
+    local clock ampm hour minute
+    clock=$(printf '%s' "$hint" | grep -oE "[0-9]{1,2}(:[0-9]{2})?")
+    ampm=$(printf '%s' "$hint" | grep -oiE "am|pm" | tr '[:upper:]' '[:lower:]')
+    hour=${clock%%:*}; minute=0
+    [[ "$clock" == *:* ]] && minute=${clock#*:}
+    hour=$((10#$hour)); minute=$((10#$minute))
+    [[ "$ampm" == "pm" && $hour -lt 12 ]] && hour=$((hour + 12))
+    [[ "$ampm" == "am" && $hour -eq 12 ]] && hour=0
+    local now midnight target
+    now=$(date +%s)
+    midnight=$(( now - (10#$(date +%H) * 3600 + 10#$(date +%M) * 60 + 10#$(date +%S)) ))
+    target=$(( midnight + hour * 3600 + minute * 60 ))
+    [[ $target -le $now ]] && target=$(( target + 86400 ))
+    local delay=$(( target - now + 120 ))
+    [[ $delay -gt 86400 ]] && delay=86400
+    printf '%s' "$delay"
+}
+
 handle_rate_limit() {
     local claude_output="${1:-}"
     local delay="${RATE_LIMIT_RETRY_DELAY:-60}"
+
+    # Non-interactive session (nohup, CI, overnight run): nobody can answer
+    # the prompt, so wait and retry instead of dying on a failed read. When the
+    # message names its reset time, sleep until then rather than polling every
+    # minute against a cap that will not lift for hours.
+    if [[ ! -t 0 ]]; then
+        local until_reset
+        until_reset=$(rate_limit_reset_delay "$claude_output")
+        if [[ -n "$until_reset" && "$until_reset" -gt "$delay" ]]; then
+            delay="$until_reset"
+        fi
+        log_warn "API rate limit detected — non-interactive session, waiting ${delay}s before retrying"
+        sleep "$delay"
+        return 0
+    fi
 
     echo ""
     log_warn "API rate limit detected"
@@ -293,7 +406,7 @@ handle_rate_limit() {
 
 # Check if running inside tmux
 in_tmux() {
-    [[ -n "$TMUX" ]]
+    [[ -n "${TMUX:-}" ]]  # :- guard: unset TMUX is fatal under set -u
 }
 
 # Start monitoring session in tmux

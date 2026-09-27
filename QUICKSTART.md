@@ -401,7 +401,7 @@ walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 ./walph.sh plan [--max-iterations N] [--model opus]
 
 # Run building (implements from plan, chains into verify when done)
-./walph.sh build [--max-iterations N] [--model sonnet]
+./walph.sh build [--max-iterations N] [--model sonnet] [--timeout SECONDS]
 
 # Verify implementation against spec acceptance criteria
 ./walph.sh verify [--max-iterations N] [--model opus]
@@ -411,6 +411,9 @@ walph init <name> [--template <type>] [--stack <type>] [--docker] [--postgres]
 
 # Any plan/build/verify command: pick the agent CLI
 ./walph.sh build --harness claude|codex|opencode
+
+# Rebuild only the tasks left unverified by timed-out iterations
+./walph.sh recover
 
 # Check status
 ./walph.sh status

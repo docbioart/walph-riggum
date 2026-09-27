@@ -60,6 +60,14 @@ parse_args() {
     PROJECT_NAME="$1"
     shift
 
+    # A leading dash means the user forgot the name and this is really an
+    # option — don't scaffold a directory literally named "--docker"
+    if [[ "$PROJECT_NAME" == -* ]]; then
+        log_error "Project name missing (got option-like argument: $PROJECT_NAME)"
+        show_usage
+        exit 1
+    fi
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --stack)
@@ -253,13 +261,26 @@ EOF
 
 create_gitignore() {
     local project_dir="$1"
+    local template="$SCRIPT_DIR/templates/gitignore.template"
 
-    log_info "Creating .gitignore..."
-    cp "$SCRIPT_DIR/templates/gitignore.template" "$project_dir/.gitignore"
+    if [[ -f "$project_dir/.gitignore" ]]; then
+        # Merge, don't clobber: the existing file may guard credentials or
+        # build outputs the template doesn't know about
+        log_info "Merging Walph entries into existing .gitignore..."
+        local line
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" ]] && continue
+            grep -qFx -- "$line" "$project_dir/.gitignore" || printf '%s\n' "$line" >> "$project_dir/.gitignore"
+        done < "$template"
+    else
+        log_info "Creating .gitignore..."
+        cp "$template" "$project_dir/.gitignore"
+    fi
 }
 
 init_git() {
     local project_dir="$1"
+    local dir_existed="${2:-false}"
 
     if [[ -d "$project_dir/.git" ]]; then
         log_info "Git repository already exists"
@@ -267,6 +288,18 @@ init_git() {
     fi
 
     log_info "Initializing git repository..."
+
+    if [[ "$dir_existed" == "true" ]]; then
+        # Pre-existing directory: `git add .` would stage unrelated files
+        # (credentials, build outputs) into the initial commit
+        (
+            cd "$project_dir"
+            git init
+        )
+        log_warn "Directory already had content — skipped the automatic initial commit."
+        log_info "Review 'git status', then stage and commit what belongs in the repo."
+        return
+    fi
 
     (
         cd "$project_dir"
@@ -293,8 +326,14 @@ main() {
 
     log_info "Initializing Walph Riggum project: $PROJECT_NAME"
 
-    # Create project directory if it doesn't exist
-    if [[ ! -d "$project_dir" ]]; then
+    # Create project directory if it doesn't exist. Remember whether it
+    # already had content — init_git must not bulk-commit pre-existing files.
+    local dir_existed=false
+    if [[ -d "$project_dir" ]]; then
+        if [[ -n "$(ls -A "$project_dir" 2>/dev/null)" ]]; then
+            dir_existed=true
+        fi
+    else
         mkdir -p "$project_dir"
     fi
 
@@ -320,7 +359,7 @@ main() {
 
     # Initialize git
     if [[ "$INIT_GIT" == "true" ]]; then
-        init_git "$project_dir"
+        init_git "$project_dir" "$dir_existed"
     fi
 
     log_success "Project initialized successfully!"

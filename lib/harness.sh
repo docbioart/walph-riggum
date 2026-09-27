@@ -436,11 +436,45 @@ _harness_scan_raw_errors() {
     local file="$1"
     [[ -s "$file" ]] || return 0
     local lines
-    lines=$(grep -iE 'rate.?limit|429|usage limit|quota|overloaded|api.?error|server.?error|unauthorized|forbidden|not logged in|authentication' "$file" 2>/dev/null | head -5 || true)
+    lines=$(grep -iE 'rate.?limit|(^|[^0-9])429([^0-9]|$)|usage limit|hit your [a-z ]*limit|your limit will reset|quota (exceeded|reached)|exceeded[a-z ]* quota|insufficient_quota|overloaded|api.?error|server.?error|unauthorized|forbidden|not logged in|authentication|ECONNRESET|ECONNREFUSED|Connection refused|Unable to connect|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|fetch failed|network is unreachable' "$file" 2>/dev/null | head -5 || true)
     local line
     while IFS= read -r line; do
         _harness_add_error "$line"
     done <<< "$lines"
+    return 0
+}
+
+# Number of lines in a file; 0 when it is empty or missing. (`grep -c` prints
+# 0 AND exits 1 on an empty file, so `$(grep -c … || echo 0)` yields "0\n0"
+# and the arithmetic on it aborts the script.)
+_harness_count_lines() {
+    local n
+    n=$(grep -c '' "$1" 2>/dev/null || true)
+    printf '%s' "${n:-0}"
+}
+
+# Reduce a JSONL event stream to the events the parser needs, line by line.
+# Codex and OpenCode embed every command's output in the stream, so a long
+# iteration (docker builds, test suites) can produce hundreds of MB; slurping
+# that into one jq string wedged the loop for an hour once. Prints the count
+# of parseable events and the type of the last one on stdout ("<n> <type>").
+# Usage: _harness_reduce_stream <in_file> <out_file> <jq select expression>
+_harness_reduce_stream() {
+    local in_file="$1" reduced="$2" keep="$3"
+    jq -cR "fromjson? | select($keep)" "$in_file" > "$reduced" 2>/dev/null || true
+    local counted
+    counted=$(jq -rR 'fromjson? | (.type // "-")' "$in_file" 2>/dev/null | awk 'END { printf "%d %s", NR, ($0 == "" ? "-" : $0) }' || true)
+    printf '%s' "${counted:-0 -}"
+}
+
+# Keep only the tail of the final response. Everything the loop parses (status
+# block, signals) sits at the end, and every "$HARNESS_TEXT" expansion of a
+# huge string costs real time in bash.
+_harness_cap_text() {
+    local cap="${WALPH_OUTPUT_CAP:-200000}"
+    if [[ "$cap" =~ ^[0-9]+$ ]] && [[ "$cap" -gt 0 ]] && [[ ${#HARNESS_TEXT} -gt $cap ]]; then
+        HARNESS_TEXT="${HARNESS_TEXT: -$cap}"
+    fi
     return 0
 }
 
@@ -479,14 +513,19 @@ _harness_parse_claude() {
 _harness_parse_codex() {
     local out_file="$1" final_file="${2:-}"
     local total_lines parsed_lines
-    total_lines=$(grep -c '' "$out_file" 2>/dev/null || echo 0)
+    total_lines=$(_harness_count_lines "$out_file")
+
+    local reduced counted
+    reduced=$(mktemp)
+    counted=$(_harness_reduce_stream "$out_file" "$reduced" \
+        '.type == "turn.completed" or .type == "turn.failed" or .type == "error" or (.type == "item.completed" and ((.item.type // "") == "agent_message"))')
+    parsed_lines="${counted%% *}"
 
     local summary
     summary=$(jq -cRs '
         [ split("\n")[] | select(length > 0) | fromjson? ] as $ev
         | ($ev | map(select(.type == "turn.completed")) | last | .usage // {}) as $u
         | {
-            parsed: ($ev | length),
             last: ($ev | map(select(.type == "item.completed" and (.item.type // "") == "agent_message") | (.item.text // "")) | last // ""),
             in: ($u.input_tokens // null),
             out: ($u.output_tokens // null),
@@ -497,9 +536,9 @@ _harness_parse_codex() {
                 + ($ev | map(select(.type == "error")
                     | (.message // (.error | if type == "object" then (.message // tostring) else tostring end))))
             )
-        }' "$out_file" 2>/dev/null || echo '{"parsed":0,"last":"","in":null,"out":null,"complete":false,"errors":[]}')
+        }' "$reduced" 2>/dev/null || echo '{"last":"","in":null,"out":null,"complete":false,"errors":[]}')
+    rm -f "$reduced"
 
-    parsed_lines=$(jq -r '.parsed' <<< "$summary")
     HARNESS_MALFORMED_LINES=$(( total_lines - parsed_lines ))
     [[ $HARNESS_MALFORMED_LINES -lt 0 ]] && HARNESS_MALFORMED_LINES=0
 
@@ -531,26 +570,32 @@ _harness_parse_codex() {
 _harness_parse_opencode() {
     local out_file="$1"
     local total_lines parsed_lines
-    total_lines=$(grep -c '' "$out_file" 2>/dev/null || echo 0)
+    total_lines=$(_harness_count_lines "$out_file")
+
+    local reduced counted last_type
+    reduced=$(mktemp)
+    counted=$(_harness_reduce_stream "$out_file" "$reduced" \
+        '.type == "text" or .type == "step_finish" or .type == "error"')
+    parsed_lines="${counted%% *}"
+    last_type="${counted#* }"
 
     local summary
-    summary=$(jq -cRs '
+    summary=$(jq -cRs --arg last_type "$last_type" '
         [ split("\n")[] | select(length > 0) | fromjson? ] as $ev
         | ($ev | map(select(.type == "text"))) as $texts
         | ($texts | map(.part.messageID) | last) as $lastmsg
         | ($ev | map(select(.type == "step_finish"))) as $steps
         | {
-            parsed: ($ev | length),
             last: ($texts | map(select(.part.messageID == $lastmsg) | (.part.text // "")) | join("\n")),
             in: ($steps | map(.part.tokens.input // 0) | if length > 0 then add else null end),
             out: ($steps | map(.part.tokens.output // 0) | if length > 0 then add else null end),
             cost: ($steps | map(.part.cost // 0) | if length > 0 then add else null end),
-            complete: (($steps | length) > 0 and (($ev | last | .type) == "step_finish") and (($steps | last | .part.reason // "") == "stop")),
+            complete: (($steps | length) > 0 and ($last_type == "step_finish") and (($steps | last | .part.reason // "") == "stop")),
             errors: ($ev | map(select(.type == "error")
                 | ((.error.name // "Error") + ": " + (.error.data.message // (.error | tostring)))))
-        }' "$out_file" 2>/dev/null || echo '{"parsed":0,"last":"","in":null,"out":null,"cost":null,"complete":false,"errors":[]}')
+        }' "$reduced" 2>/dev/null || echo '{"last":"","in":null,"out":null,"cost":null,"complete":false,"errors":[]}')
+    rm -f "$reduced"
 
-    parsed_lines=$(jq -r '.parsed' <<< "$summary")
     HARNESS_MALFORMED_LINES=$(( total_lines - parsed_lines ))
     [[ $HARNESS_MALFORMED_LINES -lt 0 ]] && HARNESS_MALFORMED_LINES=0
 
@@ -591,12 +636,22 @@ harness_parse_result() {
         *)        log_error "harness_parse_result: harness not resolved"; return 1 ;;
     esac
 
-    # stderr is a diagnostics channel; only error-looking lines join the
-    # structured errors (and never the noise codex prints about cwd resets)
+    _harness_cap_text
+
+    # stderr is a diagnostics channel, and the structured errors drive
+    # rate-limit handling and the breaker's same-error counter — so a line
+    # joins them only when it names an API/CLI failure, not whenever it
+    # contains a word like "error" or a number like 429. ("warning: mcp server
+    # listening on port 9429" and "SomeTool: error: cannot write cache quota
+    # file" must not stop a healthy run.) Three groups:
+    #   - API conditions: rate limits, caps, overload, auth
+    #   - connection failures (see check_connection_error)
+    #   - lines that START with error/fatal/panic, or carry an ERROR log level
     if [[ -s "$err_file" ]]; then
         local lines line
-        lines=$(grep -iE 'error|rate.?limit|429|quota|overloaded|unauthorized|forbidden|not logged in' "$err_file" 2>/dev/null \
-            | grep -v 'Shell cwd was reset' | head -5 || true)
+        lines=$( { grep -iE 'rate.?limit|rate_limit_error|(^|[^0-9])429([^0-9]|$)|too many requests|usage limit|hit your [a-z ]*limit|your limit will reset|quota (exceeded|reached)|exceeded[a-z ]* quota|insufficient_quota|overloaded|unauthorized|forbidden|not logged in|authentication (failed|error)|invalid api key|ECONNRESET|ECONNREFUSED|ConnectionRefused|Connection dropped|Connection refused|Unable to connect|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|fetch failed|network is unreachable|CERTIFICATE_VERIFICATION_ERROR|^[[:space:]]*(error|fatal|panic)([^[:alnum:]_]|$)' "$err_file" 2>/dev/null || true
+                   grep -E '(^|[[:space:]])ERROR([[:space:]:]|$)' "$err_file" 2>/dev/null || true
+                 } | grep -v 'Shell cwd was reset' | awk '!seen[$0]++' | head -5 || true)
         while IFS= read -r line; do
             _harness_add_error "$line"
         done <<< "$lines"

@@ -173,6 +173,8 @@ walph build                     # Implement tasks (the main loop)
 walph verify                    # Check implementation against spec acceptance
                                 #   criteria (auto-runs after a completed build)
 walph review-plan --reviewer X  # Second model reviews the plan, planner reconciles
+walph recover                   # Review tasks left unverified by timed-out
+                                #   iterations, then rebuild only those
 walph status                    # Show progress
 walph reset                     # Clear stuck state
 ```
@@ -184,6 +186,7 @@ walph reset                     # Clear stuck state
 --model <name>        Override model for this run (must fit the harness)
 --reviewer <spec>     Second-model plan review: <harness>[:<model>], e.g. codex:gpt-6-astra
 --max-iterations N    Limit iterations (default: 50)
+--timeout SECONDS     Per-iteration timeout (default: 900)
 --monitor             Tmux split with logs + git status
 --dry-run             Show what would run (prints the exact agent command)
 ```
@@ -285,6 +288,9 @@ export WALPH_REASONING_EFFORT=high
 export WALPH_PLAN_REVIEWER=claude:opus
 export WALPH_ITERATION_TIMEOUT=1200  # 20 minutes per iteration
 export WALPH_SKIP_VERIFY=true    # Don't auto-run verify after build
+export WALPH_OFFLINE_MAX_WAIT=14400  # Max seconds to wait out a network outage
+                                     # (connection failures pause the loop and
+                                     # retry the same iteration; default 4h)
 ```
 
 The per-session summary CSV in `.walph/logs/` records, per iteration, the harness, model, duration, cost (blank when the harness reports none), tokens in/out, and whether the agent's event stream completed.
@@ -332,6 +338,16 @@ Change and commit detection need a git repository. `walph init` and `walph setup
 
 ### Rate limit hit
 Walph will prompt you: wait, exit, or continue. Usually best to wait.
+
+### Iterations keep timing out
+Some tasks legitimately need more than the default 15 minutes. Raise the limit
+with `walph build --timeout 1800` (or `ITERATION_TIMEOUT` in `.walph/config`).
+
+When an iteration is killed by the timeout, Walph records any tasks it checked
+off as *unverified* and tells the next iteration to reconcile the working tree.
+After a run with timeouts, run `walph recover` to review those tasks and
+rebuild only them — each one is re-verified against its "Done when" criterion
+before being trusted.
 
 ## Jeeroy Lenkins - Document-to-Spec Converter
 
@@ -386,7 +402,7 @@ jeeroy ./client-docs --project ./my-new-api --lfg --harness codex --reviewer cla
 | Plain text   | `.txt`                       | Direct read                  |
 | Word         | `.docx`, `.doc`              | Pandoc                       |
 | PowerPoint   | `.pptx`, `.ppt`              | Pandoc                       |
-| PDF          | `.pdf`                       | Pandoc / pdftotext           |
+| PDF          | `.pdf`                       | pdftotext (poppler)          |
 | HTML         | `.html`, `.htm`              | Pandoc                       |
 | Rich Text    | `.rtf`                       | Pandoc                       |
 | OpenDocument | `.odt`                       | Pandoc                       |
@@ -400,6 +416,7 @@ jeeroy ./client-docs --project ./my-new-api --lfg --harness codex --reviewer cla
 - **An agent CLI** (required) - claude, codex, or opencode
 - **jq** (required)
 - **pandoc** (required for non-markdown formats) - `brew install pandoc`
+- **pdftotext** (required for PDFs) - `brew install poppler`
 - **chrome-devtools MCP** (recommended for UI projects) - For browser-based UI testing
 
 ### Architecture Defaults

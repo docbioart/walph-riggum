@@ -35,6 +35,7 @@ MAX_ITERATIONS_OVERRIDE=""
 MODEL_OVERRIDE=""
 HARNESS_OVERRIDE=""
 REVIEWER_OVERRIDE=""
+TIMEOUT_OVERRIDE=""
 MONITOR_MODE=false
 FAST_MODE=false
 DRY_RUN=false
@@ -92,6 +93,10 @@ parse_args() {
                 MODE="review-plan"
                 shift
                 ;;
+            recover)
+                MODE="recover"
+                shift
+                ;;
             status)
                 show_status
                 exit 0
@@ -139,6 +144,20 @@ parse_args() {
                     exit 1
                 fi
                 REVIEWER_OVERRIDE="$2"
+                shift 2
+                ;;
+            --timeout)
+                if [[ $# -lt 2 ]]; then
+                    log_error "--timeout requires a numeric argument (seconds)"
+                    show_help
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+                    log_error "--timeout must be a positive integer (seconds)"
+                    show_help
+                    exit 1
+                fi
+                TIMEOUT_OVERRIDE="$2"
                 shift 2
                 ;;
             --monitor)
@@ -414,6 +433,8 @@ create_docker_files() {
 # ============================================================================
 
 show_status() {
+    load_config  # resolve STATE_DIR et al. (idempotent; status can run standalone)
+
     echo "Walph Riggum Status"
     echo "==================="
     echo ""
@@ -423,20 +444,22 @@ show_status() {
         echo "Walph initialized: Yes"
 
         # Circuit breaker status
-        if [[ -f "$PROJECT_DIR/.walph/state/circuit_breaker.json" ]]; then
-            init_circuit_breaker "$PROJECT_DIR/.walph/state"
+        if [[ -f "$PROJECT_DIR/$STATE_DIR/circuit_breaker.json" ]]; then
+            init_circuit_breaker "$PROJECT_DIR/$STATE_DIR"
             echo "Circuit breaker: $(get_circuit_breaker_status)"
         fi
 
         # Check for implementation plan
         if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]]; then
             echo "Implementation plan: Found"
-            # Count tasks (lines starting with - [ ])
+            # Count tasks (lines starting with - [ ]). `|| true`, not
+            # `|| echo 0`: grep -c prints its own 0 and exits 1 on zero
+            # matches, so the fallback echo would append a second line
             local total_tasks
-            total_tasks=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || echo "0")
+            total_tasks=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || true)
             local completed_tasks
-            completed_tasks=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || echo "0")
-            echo "Tasks: $completed_tasks completed, $total_tasks remaining"
+            completed_tasks=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" 2>/dev/null || true)
+            echo "Tasks: ${completed_tasks:-0} completed, ${total_tasks:-0} remaining"
         else
             echo "Implementation plan: Not found (run 'walph plan' first)"
         fi
@@ -446,11 +469,18 @@ show_status() {
 }
 
 reset_state() {
+    load_config  # resolve STATE_DIR (reset can run standalone)
     log_info "Resetting Walph state..."
 
-    if [[ -d "$PROJECT_DIR/.walph/state" ]]; then
-        rm -f "$PROJECT_DIR/.walph/state/"*.json
-        rm -f "$PROJECT_DIR/.walph/state/last_iteration_note"
+    if [[ -d "$PROJECT_DIR/$STATE_DIR" ]]; then
+        rm -f "$PROJECT_DIR/$STATE_DIR/"*.json
+        rm -f "$PROJECT_DIR/$STATE_DIR/last_iteration_note"
+        rm -f "$PROJECT_DIR/$STATE_DIR/completion_signal"
+        rm -f "$PROJECT_DIR/$STATE_DIR/stuck_signal"
+        rm -f "$PROJECT_DIR/$STATE_DIR/recovery_tasks"
+        # Deliberately KEEP unverified_tasks: reset clears the breaker, but
+        # the record of timeout-interrupted tasks is still needed by
+        # 'walph recover' (it is cleared when a loop completes)
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -622,6 +652,123 @@ EOF
 }
 
 # ============================================================================
+# TIMEOUT RECOVERY
+# ============================================================================
+
+# Flip "- [x] <task>" back to "- [ ] <task>" for one exact task in the plan
+_uncheck_plan_task() {
+    local plan_file="$1"
+    local task_text="$2"
+    local tmp
+    tmp=$(mktemp)
+    local line trimmed
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Exact match after stripping indentation — substring matches could
+        # uncheck a different task that contains this one's text
+        trimmed="${line#"${line%%[![:space:]]*}"}"
+        if [[ "$trimmed" == "- [x] $task_text" ]]; then
+            printf '%s\n' "${line/- \[x\] /- [ ] }"
+        else
+            printf '%s\n' "$line"
+        fi
+    done < "$plan_file" > "$tmp"
+    mv "$tmp" "$plan_file"
+}
+
+# 'walph recover': review tasks that a timed-out iteration checked off
+# without verification, uncheck them in the plan, and rebuild ONLY those.
+prepare_recovery() {
+    local tasks_file="$PROJECT_DIR/$STATE_DIR/unverified_tasks"
+    local plan_file="$PROJECT_DIR/IMPLEMENTATION_PLAN.md"
+
+    if [[ ! -s "$tasks_file" ]]; then
+        log_info "No tasks were left unverified by a timed-out iteration — nothing to recover."
+        local dirty
+        dirty=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -5 || true)
+        if [[ -n "$dirty" ]]; then
+            log_warn "But the working tree has uncommitted changes (a killed iteration may have left them):"
+            printf '%s\n' "$dirty"
+            log_info "Run 'walph build' to let the loop reconcile them."
+        fi
+        exit 0
+    fi
+
+    if [[ ! -f "$plan_file" ]]; then
+        log_error "IMPLEMENTATION_PLAN.md not found — cannot recover"
+        exit 1
+    fi
+
+    echo ""
+    log_info "Tasks checked off during timed-out iterations (completion unverified):"
+    local task
+    while IFS= read -r task || [[ -n "$task" ]]; do
+        [[ -n "$task" ]] && echo "    - $task"
+    done < "$tasks_file"
+    echo ""
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[DRY RUN] Would uncheck these tasks in IMPLEMENTATION_PLAN.md and rebuild only them"
+        exit 0
+    fi
+
+    if [[ -t 0 ]] && ! ask_yes_no "Uncheck these task(s) in the plan and rebuild only them?" "y"; then
+        log_info "Recovery cancelled. The list is kept in $STATE_DIR/unverified_tasks."
+        exit 0
+    fi
+
+    # Uncheck each recovery task in the plan; keep only tasks still in the plan
+    local recovery_list="$PROJECT_DIR/$STATE_DIR/recovery_tasks"
+    : > "$recovery_list"
+    local recovered_count=0
+    # Whole-line matching (modulo indentation) so one task can never match
+    # another task that merely contains its text as a prefix/substring
+    local stripped_plan
+    stripped_plan=$(sed -E 's/^[[:space:]]+//' "$plan_file")
+    while IFS= read -r task || [[ -n "$task" ]]; do
+        [[ -n "$task" ]] || continue
+        if grep -qFx -- "- [x] $task" <<< "$stripped_plan"; then
+            _uncheck_plan_task "$plan_file" "$task"
+        elif ! grep -qFx -- "- [ ] $task" <<< "$stripped_plan"; then
+            log_warn "Task no longer in plan (skipping): $task"
+            continue
+        fi
+        printf '%s\n' "$task" >> "$recovery_list"
+        recovered_count=$((recovered_count + 1))
+    done < "$tasks_file"
+
+    if [[ "$recovered_count" -eq 0 ]]; then
+        log_info "None of the recorded tasks are in the current plan — nothing to recover."
+        rm -f "$tasks_file"
+        exit 0
+    fi
+
+    # Scope the fresh context to ONLY the recovery tasks via the handoff note
+    {
+        echo "RECOVERY RUN: The following task(s) were checked off during iterations that were killed by the timeout, so their completion is UNVERIFIED. They have been unchecked in IMPLEMENTATION_PLAN.md."
+        while IFS= read -r task; do echo "- $task"; done < "$recovery_list"
+        echo "Work ONLY on these tasks. For each one: verify its 'Done when' criterion actually passes (finish or redo the work if it doesn't), check it off, and commit. Do NOT start any other task from the plan."
+    } > "$PROJECT_DIR/$STATE_DIR/last_iteration_note"
+
+    # Keep unverified_tasks until the recovery loop actually completes —
+    # an interrupted recovery must remain recoverable. It is cleared in
+    # main() when LOOP_COMPLETED is true.
+    log_info "Unchecked $recovered_count task(s) — rebuilding only those"
+
+    # A recovery run is a fresh start: clear a tripped circuit breaker
+    # (typically the very trip that stranded these tasks) so the loop
+    # actually runs instead of stopping at iteration 0
+    reset_circuit_breaker
+
+    # Reuse the build machinery, with completion gated on the recovery tasks
+    MODE="build"
+    export WALPH_MODE="$MODE"
+    export TOOL_MODE="$MODE"
+    export RESUME_COMMAND="walph recover${HARNESS_FLAG:-}"
+    export COMPLETION_GROUND_TRUTH="$plan_file"
+    export WALPH_RECOVERY_TASKS_FILE="$recovery_list"
+}
+
+# ============================================================================
 # MAIN LOOP
 # ============================================================================
 
@@ -636,8 +783,10 @@ run_iteration() {
 }
 
 main_loop() {
-    # Use shared main loop implementation from lib/runner.sh
-    run_main_loop ".walph" ".walph/state" "get_model_for_mode" "walph"
+    # Use shared main loop implementation from lib/runner.sh.
+    # $STATE_DIR (not a literal) — a configured STATE_DIR would otherwise
+    # write the completion signal where this loop never looks.
+    run_main_loop ".walph" "$STATE_DIR" "get_model_for_mode" "walph"
 }
 
 # ============================================================================
@@ -653,9 +802,13 @@ init_walph() {
         FAST_MODE=false
     fi
 
-    # Command line overrides beat config file and environment
+    # Command line overrides are applied AFTER load_config so they beat the
+    # config file and env vars (precedence: defaults < config < env < CLI)
     if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
         MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
+    fi
+    if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
+        ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
     fi
 
     # Check dependencies
@@ -702,9 +855,11 @@ init_walph() {
     export RESUME_COMMAND="walph $MODE$HARNESS_FLAG"
 
     # A requested plan reviewer must be valid and installed before we spend a
-    # whole planning loop
+    # whole planning loop. Only the modes that use a reviewer check for it: a
+    # PLAN_REVIEWER committed in .walph/config must not block 'walph build' on
+    # a machine that lacks the reviewer's CLI.
     PLAN_REVIEWER_SPEC="${REVIEWER_OVERRIDE:-$PLAN_REVIEWER}"
-    if [[ -n "$PLAN_REVIEWER_SPEC" ]]; then
+    if [[ -n "$PLAN_REVIEWER_SPEC" ]] && [[ "$MODE" == "plan" || "$MODE" == "review-plan" ]]; then
         check_reviewer_ready "$PLAN_REVIEWER_SPEC" || exit 1
     fi
 
@@ -713,6 +868,7 @@ init_walph() {
     log_info "Harness: $(harness_display_name) ($HARNESS)"
     warn_if_not_git_repo
     log_info "Max iterations: $MAX_ITERATIONS"
+    log_info "Iteration timeout: ${ITERATION_TIMEOUT}s"
     log_debug "Project directory: $PROJECT_DIR"
     log_debug "Script directory: $SCRIPT_DIR"
 }
@@ -745,6 +901,18 @@ main() {
     fi
 
     init_walph
+
+    # One loop per project: a second concurrent run would mutate the same
+    # working tree and shared state. The EXIT trap must keep the runner's
+    # temp-file cleanup — setting a new EXIT trap replaces the old one.
+    acquire_run_lock "$PROJECT_DIR/$STATE_DIR/walph.lock" "walph"
+    trap 'release_run_lock; cleanup_runner_temp_files' EXIT
+
+    # Timeout recovery: review tasks interrupted by killed iterations, then
+    # rebuild only those (prepare_recovery exits if there is nothing to do)
+    if [[ "$MODE" == "recover" ]]; then
+        prepare_recovery
+    fi
 
     # Start monitoring if requested
     if [[ "$MONITOR_MODE" == "true" ]]; then
@@ -794,6 +962,11 @@ main() {
         fi
     fi
 
+    # A completed build supersedes any recorded timeout leftovers
+    if [[ "${LOOP_COMPLETED:-false}" == "true" ]]; then
+        rm -f "$PROJECT_DIR/$STATE_DIR/unverified_tasks" "$PROJECT_DIR/$STATE_DIR/recovery_tasks"
+    fi
+
     # After a completed build, chain into verification: check the
     # implementation against the specs' acceptance criteria, not just the plan.
     # Skippable with WALPH_SKIP_VERIFY=true.
@@ -805,16 +978,28 @@ main() {
         MODE="verify"
         export WALPH_MODE="$MODE"
         export TOOL_MODE="$MODE"
-        export RESUME_COMMAND="walph verify"
+        # keep --harness: resuming without it would switch back to Claude
+        export RESUME_COMMAND="walph verify${HARNESS_FLAG:-}"
         unset COMPLETION_GROUND_TRUTH
+        unset WALPH_RECOVERY_TASKS_FILE
         exit_code=0
         main_loop || exit_code=$?
 
         # Verification files failing criteria as new plan tasks — surface them
+        # and exit nonzero: a run with failing criteria is not a success
         if [[ -f "$PROJECT_DIR/IMPLEMENTATION_PLAN.md" ]] && has_unchecked_boxes "$PROJECT_DIR/IMPLEMENTATION_PLAN.md"; then
             echo ""
             log_warn "Verification added fix tasks to IMPLEMENTATION_PLAN.md — run 'walph build' again to address them"
+            exit_code=3
         fi
+    fi
+
+    # Distinguish "loop ended without completing" (max iterations, user exit)
+    # from genuine completion: exit 3 so callers like jeeroy --lfg can't
+    # mistake an exhausted run for a finished one
+    if [[ "$DRY_RUN" != "true" ]] && [[ $exit_code -eq 0 ]] \
+        && [[ "${LOOP_COMPLETED:-false}" != "true" ]]; then
+        exit_code=3
     fi
 
     # Summary

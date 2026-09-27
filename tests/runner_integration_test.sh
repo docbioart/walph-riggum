@@ -94,13 +94,19 @@ FAKE_SCENARIO=prose_429 run_walph "$p" "$out" build --max-iterations 1
 expect_not_contains "prose_429: no rate-limit handler" "$out" "API rate limit detected"
 expect_contains "prose_429: status parsed" "$out" "Completion: MEDIUM"
 
+# (non-interactive runs WAIT and retry on a rate limit instead of exiting: an
+# unattended overnight run must survive a cap. RATE_LIMIT_RETRY_DELAY=1 keeps
+# the wait short here.)
 # ---------------------------------------------------------------- structured rate-limit errors are
 for h in claude codex opencode; do
     p=$(make_project); out="$WORK/ratelimit-$h.txt"
+    printf 'RATE_LIMIT_RETRY_DELAY=1   # seconds\n' >> "$p/.walph/config"
     FAKE_SCENARIO=error_event run_walph "$p" "$out" build --harness "$h" --max-iterations 2
     expect_contains "error_event/$h: rate limit detected" "$out" "API rate limit detected"
-    expect_contains "error_event/$h: non-interactive choice exits" "$out" "Exit requested by user"
-    expect_not_contains "error_event/$h: no second iteration" "$out" "Iteration 2 / 2"
+    expect_contains "error_event/$h: non-interactive run waits" "$out" "non-interactive session, waiting 1s"
+    expect_not_contains "error_event/$h: does not exit as if the user asked" "$out" "Exit requested by user"
+    expect_contains "error_event/$h: carries on to the next iteration" "$out" "Iteration 2 / 2"
+    expect_eq "error_event/$h: an unfinished run exits 3" 3 "$EC"
 done
 
 # ---------------------------------------------------------------- last status block wins (verify has no ground truth)
@@ -119,9 +125,94 @@ expect_not_contains "no_final: no completion" "$out" "Completion signal received
 for h in claude codex opencode; do
     p=$(make_project); out="$WORK/trunc-$h.txt"
     FAKE_SCENARIO=truncated run_walph "$p" "$out" verify --harness "$h" --max-iterations 1
-    expect_eq "truncated/$h: loop finishes cleanly" 0 "$EC"
+    # 3 = "ended without completing" (max iterations reached), not a crash
+    expect_eq "truncated/$h: loop ends without completing, no crash" 3 "$EC"
+    expect_contains "truncated/$h: reached the end of the loop" "$out" "Maximum iterations"
     expect_not_contains "truncated/$h: no completion" "$out" "Completion signal received"
 done
+
+# ---------------------------------------------------------------- an agent that writes nothing and fails
+# (empty stdout used to abort the whole script with an arithmetic error)
+for h in claude codex opencode; do
+    p=$(make_project); out="$WORK/silent-$h.txt"
+    FAKE_SCENARIO=silent_fail run_walph "$p" "$out" build --harness "$h" --max-iterations 2
+    expect_not_contains "silent_fail/$h: no shell error" "$out" "syntax error"
+    expect_contains "silent_fail/$h: failure is reported" "$out" "exited with code 3"
+    expect_contains "silent_fail/$h: second iteration still runs" "$out" "Iteration 2 / 2"
+    expect_file "silent_fail/$h: handoff note written" "$p/.walph/state/last_iteration_note"
+    expect_eq "silent_fail/$h: exit 3 (not completed)" 3 "$EC"
+done
+
+# ---------------------------------------------------------------- agent exit code 2 is not "user chose to exit"
+for h in claude codex opencode; do
+    p=$(make_project); out="$WORK/exit2-$h.txt"
+    FAKE_SCENARIO=exit2 run_walph "$p" "$out" build --harness "$h" --max-iterations 2
+    expect_not_contains "exit2/$h: not mistaken for a user exit" "$out" "Exit requested by user"
+    expect_contains "exit2/$h: second iteration still runs" "$out" "Iteration 2 / 2"
+    expect_eq "exit2/$h: exit 3 (not completed), never 0" 3 "$EC"
+done
+
+# ---------------------------------------------------------------- harmless stderr does not stop a healthy run
+for h in claude codex opencode; do
+    p=$(make_project); out="$WORK/noise-$h.txt"
+    FAKE_SCENARIO=stderr_noise run_walph "$p" "$out" build --harness "$h" --max-iterations 2
+    expect_not_contains "stderr_noise/$h: no rate-limit handler" "$out" "API rate limit detected"
+    expect_not_contains "stderr_noise/$h: no API error" "$out" "API error detected"
+    expect_contains "stderr_noise/$h: completed" "$out" "All work completed!"
+    expect_eq "stderr_noise/$h: exit 0" 0 "$EC"
+done
+
+# ---------------------------------------------------------------- a network outage is retried, not counted
+for h in claude codex opencode; do
+    p=$(make_project); out="$WORK/net-$h.txt"
+    FAKE_NET_MARKER="$WORK/net-marker-$h" WALPH_CONNECTIVITY_URL="file://$ROOT/README.md" \
+        FAKE_SCENARIO=net_down_once run_walph "$p" "$out" build --harness "$h" --max-iterations 1
+    expect_contains "net_down/$h: outage recognised" "$out" "could not reach the API"
+    expect_contains "net_down/$h: same iteration retried" "$out" "Retrying iteration 1 after connectivity pause"
+    expect_not_contains "net_down/$h: iteration counter not burned" "$out" "Maximum iterations"
+    expect_contains "net_down/$h: completed on the retry" "$out" "All work completed!"
+    expect_eq "net_down/$h: exit 0" 0 "$EC"
+done
+
+# ---------------------------------------------------------------- config values with inline comments
+p=$(make_project); out="$WORK/inline-comment.txt"
+printf 'ITERATION_TIMEOUT=2  # seconds\nMAX_ITERATIONS="1"   # quoted\n' >> "$p/.walph/config"
+marker="$WORK/inline-comment.child"
+FAKE_HANG_MARKER="$marker" FAKE_SCENARIO=hang run_walph "$p" "$out" build
+expect_contains "inline comment: timeout value is used" "$out" "timed out after 2s"
+expect_contains "inline comment: quoted max iterations is used" "$out" "Iteration 1 / 1"
+expect_not_contains "inline comment: no shell error" "$out" "syntax error"
+if [[ -s "$marker" ]] && kill -0 "$(cat "$marker")" 2>/dev/null; then
+    bad "inline comment: the hung agent's child survived the timeout"
+    kill "$(cat "$marker")" 2>/dev/null || true
+else
+    ok
+fi
+
+# ---------------------------------------------------------------- a configured reviewer does not block build
+p=$(make_project); out="$WORK/reviewer-gate.txt"
+printf 'PLAN_REVIEWER=nosuchharness:model\n' >> "$p/.walph/config"
+FAKE_SCENARIO=pipeline run_walph "$p" "$out" build --max-iterations 2
+expect_eq "reviewer gate: build ignores an unusable PLAN_REVIEWER" 0 "$EC"
+expect_contains "reviewer gate: build completed" "$out" "All work completed!"
+FAKE_SCENARIO=pipeline run_walph "$p" "$out.plan" plan --max-iterations 2
+expect_eq "reviewer gate: plan still rejects it" 1 "$EC"
+
+# ---------------------------------------------------------------- timed-out iteration records unverified tasks
+p=$(make_project); out="$WORK/unverified.txt"
+cat > "$WORK/check-then-hang" <<'FAKE'
+#!/usr/bin/env bash
+# checks the task off, then hangs: the loop must not trust that checkbox
+cat > /dev/null
+sed -i.bak 's/^- \[ \] Task 1.1/- [x] Task 1.1/' "$FAKE_PROJECT_DIR/IMPLEMENTATION_PLAN.md" && rm -f "$FAKE_PROJECT_DIR/IMPLEMENTATION_PLAN.md.bak"
+sleep 300
+FAKE
+chmod +x "$WORK/check-then-hang"; mkdir -p "$WORK/hangbin"; ln -sf "$WORK/check-then-hang" "$WORK/hangbin/claude"
+(cd "$p" && PATH="$WORK/hangbin:$PATH" WALPH_SKIP_VERIFY=true FAKE_PROJECT_DIR="$p" "$ROOT/walph.sh" build --timeout 2 --max-iterations 1) > "$out" 2>&1 < /dev/null || true
+expect_contains "unverified: --timeout flag is used" "$out" "timed out after 2s"
+expect_file "unverified: task list written for 'walph recover'" "$p/.walph/state/unverified_tasks"
+expect_contains "unverified: the task is named" "$p/.walph/state/unverified_tasks" "Task 1.1"
+expect_contains "unverified: next iteration is told" "$p/.walph/state/last_iteration_note" "UNVERIFIED"
 
 # ---------------------------------------------------------------- stuck signal stops the loop
 p=$(make_project); out="$WORK/stuck.txt"
@@ -175,6 +266,40 @@ FAKE_SCENARIO=pipeline run_walph "$p" "$out" plan --reviewer opencode --max-iter
 expect_eq "plan --reviewer: exit 0" 0 "$EC"
 expect_contains "plan --reviewer: review ran after planning" "$out" "OpenCode (harness default) reviewing IMPLEMENTATION_PLAN.md"
 expect_contains "plan --reviewer: dispositions" "$p/PLAN_REVIEW.md" "## Dispositions"
+
+# ---------------------------------------------------------------- interrupting jeeroy stops the agent
+# (the agent used to run inside $(...): its PID lived in a subshell, so the
+# signal handler had nothing to kill and the agent carried on as an orphan)
+mkdir -p "$WORK/docs"; printf '# Brief\nBuild a CLI that prints hello.\n' > "$WORK/docs/brief.md"
+proj="$WORK/jeeroy-int"; out="$WORK/jeeroy-int.txt"; marker="$WORK/jeeroy-int.child"
+mkdir -p "$proj"   # otherwise jeeroy asks whether to create it, and stdin is /dev/null
+(cd "$WORK" && FAKE_SCENARIO=hang FAKE_HANG_MARKER="$marker" FAKE_PROJECT_DIR="$proj" \
+    exec "$ROOT/jeeroy.sh" ./docs --project "$proj" --skip-qa) > "$out" 2>&1 < /dev/null &
+jeeroy_pid=$!
+waited=0
+while [[ ! -s "$marker" ]] && [[ $waited -lt 30 ]]; do sleep 1; waited=$((waited + 1)); done
+if [[ -s "$marker" ]]; then
+    ok
+    child=$(cat "$marker")
+    # TERM, not INT: a background job of a non-interactive shell starts with
+    # SIGINT ignored, so it could never see one. Both signals run the same handler.
+    kill -TERM "$jeeroy_pid" 2>/dev/null || true
+    waited=0
+    while kill -0 "$jeeroy_pid" 2>/dev/null && [[ $waited -lt 15 ]]; do sleep 1; waited=$((waited + 1)); done
+    if kill -0 "$jeeroy_pid" 2>/dev/null; then bad "jeeroy interrupt: jeeroy still running"; kill -KILL "$jeeroy_pid" 2>/dev/null || true; else ok; fi
+    sleep 1
+    if kill -0 "$child" 2>/dev/null; then
+        bad "jeeroy interrupt: the agent's child survived as an orphan"
+        kill -KILL "$child" 2>/dev/null || true
+    else
+        ok
+    fi
+    expect_contains "jeeroy interrupt: reported" "$out" "Interrupted"
+else
+    bad "jeeroy interrupt: the agent never started (no marker after 30s)"
+    kill -KILL "$jeeroy_pid" 2>/dev/null || true
+fi
+wait "$jeeroy_pid" 2>/dev/null || true
 
 # ---------------------------------------------------------------- jeeroy --lfg is gated by the review
 mkdir -p "$WORK/docs"; printf '# Brief\nBuild a CLI that prints hello.\n' > "$WORK/docs/brief.md"

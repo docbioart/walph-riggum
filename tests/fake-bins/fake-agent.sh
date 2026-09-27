@@ -14,6 +14,12 @@
 #   no_final      events but no assistant text at all
 #   prose_429     final text talks about "429" and "rate limit" (no error)
 #   stuck         final text carries the RALPH_STUCK signal
+#   silent_fail   write nothing at all, exit 3 (crash / auth failure)
+#   exit2         usage error on stderr, exit 2 (the code the loop reserves)
+#   stderr_noise  a normal answer plus harmless stderr lines that merely
+#                 contain "error", "quota" or a number with 429 in it
+#   net_down_once first call: connection refused, exit 1; later calls: pipeline
+#                 (state in FAKE_NET_MARKER)
 #
 # Env: FAKE_PROJECT_DIR (where plan/spec files live), FAKE_ARGV_LOG (append
 # argv here), FAKE_REVIEW=bad (plan review emits no block),
@@ -87,6 +93,24 @@ case "$scenario" in
     prose_429)  text=$(printf 'I improved the 429 rate limit handling and the retry on rate_limit_error.\n'; status_block MEDIUM false 2) ;;
     stuck)      text=$(printf 'RALPH_STUCK\nReason: the spec contradicts itself\n'; status_block LOW false 2) ;;
     no_final)   text="" ;;
+    silent_fail) exit 3 ;;
+    exit2)
+        echo "usage: bad flag" >&2
+        exit 2
+        ;;
+    stderr_noise)
+        echo "warning: mcp server listening on port 9429" >&2
+        echo "DVTDeviceOperation: error: unable to write cache quota file" >&2
+        text=$(pipeline_text)
+        ;;
+    net_down_once)
+        if [[ ! -e "${FAKE_NET_MARKER:?}" ]]; then
+            : > "$FAKE_NET_MARKER"
+            echo "request to the API failed, reason: connect ECONNREFUSED 127.0.0.1:443" >&2
+            exit 1
+        fi
+        text=$(pipeline_text)
+        ;;
     hang)
         sleep 300 &
         echo $! > "${FAKE_HANG_MARKER:-/dev/null}"

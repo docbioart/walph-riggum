@@ -223,6 +223,9 @@ load_goodbunny_config() {
     fi
 
     # CLI flag overrides (highest priority)
+    if [[ -n "$MAX_ITERATIONS_OVERRIDE" ]]; then
+        MAX_ITERATIONS="$MAX_ITERATIONS_OVERRIDE"
+    fi
     if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
         ITERATION_TIMEOUT="$TIMEOUT_OVERRIDE"
     fi
@@ -362,7 +365,7 @@ show_gb_status() {
         if [[ -f "$PROJECT_DIR/GOODBUNNY_REPORT.md" ]]; then
             echo "Codebase report: Found"
             local sections_complete
-            sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || echo "0")
+            sections_complete=$(grep -c '^## [0-9]' "$PROJECT_DIR/GOODBUNNY_REPORT.md" 2>/dev/null || true)
             echo "Report sections: $sections_complete of 12"
             if [[ -f "$PROJECT_DIR/goodbunny.mermaid" ]]; then
                 echo "Architecture diagram: Found (goodbunny.mermaid)"
@@ -375,9 +378,9 @@ show_gb_status() {
         if [[ -f "$PROJECT_DIR/REVIEW_FINDINGS.md" ]]; then
             echo "Review findings: Found"
             local total_findings
-            total_findings=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || echo "0")
+            total_findings=$(grep -c '^\s*- \[ \]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || true)
             local fixed_findings
-            fixed_findings=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || echo "0")
+            fixed_findings=$(grep -c '^\s*- \[x\]' "$PROJECT_DIR/REVIEW_FINDINGS.md" 2>/dev/null || true)
             echo "Findings: $fixed_findings fixed, $total_findings remaining"
         else
             echo "Review findings: Not found (run 'goodbunny audit' first)"
@@ -393,6 +396,9 @@ reset_gb_state() {
     if [[ -d "$PROJECT_DIR/$GB_STATE_DIR" ]]; then
         rm -f "$PROJECT_DIR/$GB_STATE_DIR/"*.json
         rm -f "$PROJECT_DIR/$GB_STATE_DIR/last_iteration_note"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/completion_signal"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/stuck_signal"
+        rm -f "$PROJECT_DIR/$GB_STATE_DIR/unverified_tasks"
         log_success "State reset complete"
     else
         log_warn "No state directory found"
@@ -674,6 +680,11 @@ main() {
     parse_args "$@"
 
     init_goodbunny
+
+    # One loop per project (see lib/utils.sh acquire_run_lock). The EXIT
+    # trap must keep the runner's temp-file cleanup.
+    acquire_run_lock "$PROJECT_DIR/$GB_STATE_DIR/goodbunny.lock" "goodbunny"
+    trap 'release_run_lock; cleanup_runner_temp_files' EXIT
 
     # Run main loop (capture the status without tripping errexit)
     local exit_code=0
