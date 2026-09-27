@@ -346,7 +346,7 @@ Walph will prompt you: wait, exit, or continue. Usually best to wait.
   ┌──────────┐                    ┌──────────┐
   │ .docx    │                    │ specs/   │
   │ .pdf     │───> Jeeroy ───>    │ *.md     │───> walph plan -> build
-  │ .pptx    │    (any harness)  │          │
+  │ .pptx    │    (any harness)   │          │
   │ .md/.txt │                    └──────────┘
   └──────────┘
 ```
