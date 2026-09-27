@@ -474,9 +474,10 @@ _harness_reduce_stream() {
 # silently lose the beginning of it.
 harness_cap_text() {
     local cap="${WALPH_OUTPUT_CAP:-200000}"
-    # canonical decimal only: bash reads 08 as invalid octal
-    [[ "$cap" =~ ^[1-9][0-9]*$ ]] || cap=200000
-    if [[ ${#HARNESS_TEXT} -gt $cap ]]; then
+    # Canonical decimal of at most 12 digits: bash reads 08 as invalid octal,
+    # and a value past 2^63 wraps negative, which would empty the response
+    [[ "$cap" =~ ^[1-9][0-9]{0,11}$ ]] || cap=200000
+    if [[ "$cap" -gt 0 ]] && [[ ${#HARNESS_TEXT} -gt $cap ]]; then
         HARNESS_TEXT="${HARNESS_TEXT: -$cap}"
     fi
     return 0

@@ -257,6 +257,14 @@ harness_parse_result "$LONG" "$EMPTY" ""; harness_cap_text
 assert_eq "cap: default leaves a short response whole" "$whole" "${#HARNESS_TEXT}"
 harness_parse_result "$LONG" "$EMPTY" ""; rc=0; WALPH_OUTPUT_CAP=08 harness_cap_text 2>/dev/null || rc=$?
 assert_eq "cap: a zero-padded override is ignored, no arithmetic error" "0 $whole" "$rc ${#HARNESS_TEXT}"
+for big in 9223372036854775808 18446744073709551615 99999999999999999999999; do
+    HARNESS_TEXT="EXIT_SIGNAL:true"; WALPH_OUTPUT_CAP=$big harness_cap_text
+    assert_eq "cap: an oversized override ($big) leaves the response intact" "EXIT_SIGNAL:true" "$HARNESS_TEXT"
+done
+for bad in 0 -5 abc "" "1 000"; do
+    HARNESS_TEXT="EXIT_SIGNAL:true"; WALPH_OUTPUT_CAP=$bad harness_cap_text
+    assert_eq "cap: an invalid override ($bad) leaves the response intact" "EXIT_SIGNAL:true" "$HARNESS_TEXT"
+done
 assert_eq "scratch: no parser scratch file left registered" "" "$HARNESS_SCRATCH_FILE"
 
 # a response with several generated files keeps all of them
