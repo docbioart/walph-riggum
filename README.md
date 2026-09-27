@@ -107,6 +107,17 @@ Each build iteration is independent. The agent reads the current state from file
 
 ## Quick Start
 
+### Install
+
+```bash
+git clone https://github.com/docbioart/walph-riggum.git
+cd walph-riggum
+./install.sh                     # checks for an agent CLI, git, jq; installs wrappers in ~/bin
+export PATH="$HOME/bin:$PATH"    # add to your shell profile if ~/bin is not already on PATH
+```
+
+This gives you the `walph`, `jeeroy`, and `goodbunny` commands. Without installing, call the scripts by path (`/path/to/walph-riggum/walph.sh ...`) as the examples below do. `uninstall.sh` removes the wrappers.
+
 ### New Project
 
 ```bash
@@ -143,6 +154,20 @@ cd your-existing-project
 /path/to/walph.sh plan
 /path/to/walph.sh build
 ```
+
+### Other Harnesses and a Second Opinion
+
+Every `plan`, `build`, and `verify` command runs on Claude Code unless told otherwise:
+
+```bash
+walph plan --harness codex                   # gpt-6-astra plans
+walph build --harness codex                  # gpt-5.6-sol builds, gpt-6-astra verifies
+walph build --harness opencode               # the model in your opencode.json
+walph plan --reviewer codex:gpt-6-astra      # Claude plans, Codex Astra reviews, Claude reconciles
+walph build --dry-run                        # print the exact agent command instead of running it
+```
+
+Details in [Harnesses](#harnesses) and [Second-Model Plan Review](#second-model-plan-review).
 
 ## Project Structure
 
