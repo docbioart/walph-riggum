@@ -247,12 +247,26 @@ tasks_remaining: 0
 current_task: none
 EXIT_SIGNAL: true
 RALPH_STATUS_END" '{type:"result",subtype:"success",is_error:false,result:$t,total_cost_usd:0.01,usage:{input_tokens:1,output_tokens:1}}' > "$LONG"
-WALPH_OUTPUT_CAP=1000 harness_parse_result "$LONG" "$EMPTY" ""
+harness_parse_result "$LONG" "$EMPTY" ""; whole=${#HARNESS_TEXT}
+assert_eq "cap: parsing never truncates (Jeeroy's specs need the whole response)" true "$([[ $whole -gt 5000 ]] && echo true || echo false)"
+WALPH_OUTPUT_CAP=1000 harness_cap_text
 assert_eq "cap: text limited to WALPH_OUTPUT_CAP" 1000 "${#HARNESS_TEXT}"
 rc=0; check_completion "$HARNESS_TEXT" || rc=$?
 assert_eq "cap: status block at the end still read" 0 "$rc"
-harness_parse_result "$LONG" "$EMPTY" ""
-assert_eq "cap: default leaves a short response whole" true "$([[ ${#HARNESS_TEXT} -gt 5000 ]] && echo true || echo false)"
+harness_parse_result "$LONG" "$EMPTY" ""; harness_cap_text
+assert_eq "cap: default leaves a short response whole" "$whole" "${#HARNESS_TEXT}"
+harness_parse_result "$LONG" "$EMPTY" ""; rc=0; WALPH_OUTPUT_CAP=08 harness_cap_text 2>/dev/null || rc=$?
+assert_eq "cap: a zero-padded override is ignored, no arithmetic error" "0 $whole" "$rc ${#HARNESS_TEXT}"
+assert_eq "scratch: no parser scratch file left registered" "" "$HARNESS_SCRATCH_FILE"
+
+# a response with several generated files keeps all of them
+SPECS="$TMP/claude-specs.json"
+jq -n --arg t "===SPEC_FILE: a.md===
+$(printf 'a%.0s' $(seq 1 3000))
+===SPEC_FILE: b.md===
+$(printf 'b%.0s' $(seq 1 3000))" '{type:"result",subtype:"success",is_error:false,result:$t,total_cost_usd:0.01,usage:{input_tokens:1,output_tokens:1}}' > "$SPECS"
+WALPH_OUTPUT_CAP=2000 harness_parse_result "$SPECS" "$EMPTY" ""
+assert_eq "specs: both file markers survive parsing, whatever the cap" 2 "$(printf '%s\n' "$HARNESS_TEXT" | grep -c '^===SPEC_FILE: ')"
 
 # ---------------------------------------------------------------- stderr: what counts as an error
 HARNESS=claude
@@ -300,6 +314,12 @@ assert_eq "config: quotes and comment stripped" opus "$MODEL_PLAN"
 assert_eq "config: bare value" sonnet "$MODEL_BUILD"
 assert_eq "config: # inside quotes is data" "build #1" "$LOG_DIR"
 assert_eq "config: non-integer ignored, previous value kept" 50 "$MAX_ITERATIONS"
+printf 'MAX_ITERATIONS=08\nITERATION_TIMEOUT=0900\nRATE_LIMIT_RETRY_DELAY=0\n' > "$CFG"
+MAX_ITERATIONS=50; ITERATION_TIMEOUT=900; RATE_LIMIT_RETRY_DELAY=60
+load_config_file "$CFG" "$WALPH_CONFIG_KEYS" >/dev/null 2>&1
+assert_eq "config: zero-padded 08 rejected (bash would read it as bad octal)" 50 "$MAX_ITERATIONS"
+assert_eq "config: zero-padded 0900 rejected" 900 "$ITERATION_TIMEOUT"
+assert_eq "config: a plain 0 is accepted" 0 "$RATE_LIMIT_RETRY_DELAY"
 assert_eq "config: unknown key ignored" "" "$NOT_ALLOWED"
 
 echo "harness_parse_test: $PASS passed, $FAIL failed"

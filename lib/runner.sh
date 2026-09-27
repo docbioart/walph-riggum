@@ -21,16 +21,18 @@
 
 set -euo pipefail
 
-# Track temp files for cleanup on exit
-RUNNER_TEMP_FILES=""
+# Track temp files for cleanup on exit. An array, not a space-joined string:
+# with a TMPDIR that contains a space, word splitting would leak the real
+# files and could remove an unrelated path.
+RUNNER_TEMP_FILES=()
 
 cleanup_runner_temp_files() {
-    if [[ -n "$RUNNER_TEMP_FILES" ]]; then
-        local f
-        for f in $RUNNER_TEMP_FILES; do
-            rm -f "$f" 2>/dev/null
-        done
-        RUNNER_TEMP_FILES=""
+    if [[ ${#RUNNER_TEMP_FILES[@]} -gt 0 ]]; then
+        rm -f -- "${RUNNER_TEMP_FILES[@]}" 2>/dev/null || true
+        RUNNER_TEMP_FILES=()
+    fi
+    if declare -f harness_cleanup_scratch > /dev/null 2>&1; then
+        harness_cleanup_scratch
     fi
 }
 
@@ -54,7 +56,7 @@ new_runner_temp() {
     local var_name="$1"
     local tmp
     tmp=$(mktemp)
-    RUNNER_TEMP_FILES="$RUNNER_TEMP_FILES $tmp"
+    RUNNER_TEMP_FILES+=("$tmp")
     eval "$var_name=\"\$tmp\""
 }
 
@@ -62,8 +64,13 @@ new_runner_temp() {
 release_runner_temp() {
     local file="$1"
     [[ -n "$file" ]] || return 0
-    rm -f "$file" 2>/dev/null
-    RUNNER_TEMP_FILES="${RUNNER_TEMP_FILES// $file/}"
+    rm -f -- "$file" 2>/dev/null || true
+    # rebuild without it (exact match; bash 3.2 cannot unset by value)
+    local kept=() f
+    for f in ${RUNNER_TEMP_FILES[@]+"${RUNNER_TEMP_FILES[@]}"}; do
+        [[ "$f" == "$file" ]] || kept+=("$f")
+    done
+    RUNNER_TEMP_FILES=(${kept[@]+"${kept[@]}"})
 }
 
 # Remove the loop's signal files from a state directory (stale signals from an
@@ -259,6 +266,10 @@ run_shared_iteration() {
     local exit_code=0
     harness_exec "$model" full "$temp_prompt" "$temp_output" "$temp_err" "$temp_final" "$timeout" || exit_code=$?
     harness_parse_result "$temp_output" "$temp_err" "$temp_final"
+    # The loop only reads the END of the response (status block, signals), so
+    # cap it here. Callers that need the whole text (Jeeroy's generated specs,
+    # plan review) parse the result themselves and are not capped.
+    harness_cap_text
 
     # Console shows the final response (the control channel); the raw event
     # stream and stderr go to the session log only
@@ -310,14 +321,26 @@ run_shared_iteration() {
     # Network outage: a connection-level failure is not the agent being stuck.
     # Don't count it toward the circuit breaker — pause until connectivity
     # returns, then have the main loop retry this same iteration (return 4).
-    if [[ "$outcome" != "ok" ]] && check_connection_error "$HARNESS_ERRORS"; then
-        log_warn "$(harness_display_name) could not reach the API (network down?) — pausing until connectivity returns"
-        if wait_for_connectivity; then
-            log_info "Connectivity restored — will retry iteration $iteration"
-            return 4
+    #
+    # Only for an agent that EXITED on the failure. One that was killed by the
+    # timeout is handled as a timeout, so the tasks it checked off are recorded
+    # as unverified. And when the retries are used up, or the wait runs out,
+    # fall through to the normal failure bookkeeping below (handoff note,
+    # circuit breaker) instead of returning early without it.
+    if [[ "$outcome" == exit:* ]] && check_connection_error "$HARNESS_ERRORS"; then
+        if [[ "${RUNNER_NET_RETRY_COUNT:-0}" -ge "${RUNNER_NET_RETRY_MAX:-8}" ]]; then
+            log_warn "Connectivity keeps failing mid-request — counting this as a failed iteration"
+        else
+            log_warn "$(harness_display_name) could not reach the API (network down?) — pausing until connectivity returns"
+            if wait_for_connectivity; then
+                log_info "Connectivity restored — will retry iteration $iteration"
+                _write_last_iteration_note "$state_dir" "$iteration" "no status (network outage)" \
+                    "$(extract_error_message "$HARNESS_ERRORS")" "$outcome" \
+                    "The network dropped during this iteration; it is being retried. Reconcile the working tree first."
+                return 4
+            fi
+            log_error "Still offline after the maximum wait (WALPH_OFFLINE_MAX_WAIT) — counting this as a failed iteration"
         fi
-        log_error "Still offline after the maximum wait (WALPH_OFFLINE_MAX_WAIT) — giving up on this iteration"
-        return 1
     fi
 
     if check_api_error "$HARNESS_ERRORS"; then
@@ -443,7 +466,9 @@ run_main_loop() {
     clear_loop_signals "$state_dir"
 
     local iteration=1
-    local net_retry_count=0
+    # read by run_shared_iteration: once the retries are used up it stops
+    # returning 4 and books the failure normally
+    RUNNER_NET_RETRY_COUNT=0
 
     while [[ $iteration -le $MAX_ITERATIONS ]]; do
         # Check circuit breaker before iteration
@@ -484,16 +509,11 @@ run_main_loop() {
         # iteration without burning the counter or the circuit breaker.
         # The consecutive cap guards against a reachable-but-broken API.
         if [[ $result -eq 4 ]]; then
-            net_retry_count=$((net_retry_count + 1))
-            if [[ $net_retry_count -le 8 ]]; then
-                log_info "Retrying iteration $iteration after connectivity pause (retry $net_retry_count)"
-                continue
-            fi
-            log_warn "Connectivity keeps failing mid-request — counting as a failed iteration"
-            result=1
-        else
-            net_retry_count=0
+            RUNNER_NET_RETRY_COUNT=$((RUNNER_NET_RETRY_COUNT + 1))
+            log_info "Retrying iteration $iteration after connectivity pause (retry $RUNNER_NET_RETRY_COUNT)"
+            continue
         fi
+        RUNNER_NET_RETRY_COUNT=0
 
         if [[ $result -eq 0 ]]; then
             log_success "Iteration $iteration completed successfully"

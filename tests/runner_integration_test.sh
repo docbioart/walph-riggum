@@ -174,6 +174,27 @@ for h in claude codex opencode; do
     expect_eq "net_down/$h: exit 0" 0 "$EC"
 done
 
+# ---------------------------------------------------------------- an outage that never clears is booked as a failure
+# (the probe says "online" but every request fails: after the retries are
+# used up the iteration must reach the handoff note and the circuit breaker)
+p=$(make_project); out="$WORK/net-exhausted.txt"
+WALPH_CONNECTIVITY_URL="file://$ROOT/README.md" RUNNER_NET_RETRY_MAX=3 \
+    FAKE_SCENARIO=net_down run_walph "$p" "$out" build --max-iterations 1
+expect_contains "net exhausted: retried first" "$out" "Retrying iteration 1 after connectivity pause (retry 3)"
+expect_contains "net exhausted: then counted as a failure" "$out" "counting this as a failed iteration"
+expect_file "net exhausted: handoff note written" "$p/.walph/state/last_iteration_note"
+expect_contains "net exhausted: the note names the error" "$p/.walph/state/last_iteration_note" "ECONNREFUSED"
+expect_contains "net exhausted: circuit breaker saw the error" "$p/.walph/state/circuit_breaker.json" "ECONNREFUSED"
+expect_eq "net exhausted: exit 3 (not completed)" 3 "$EC"
+
+# ---------------------------------------------------------------- a temp dir with a space in its name
+p=$(make_project); out="$WORK/tmpspace.txt"
+mkdir -p "$WORK/tmp dir"; : > "$WORK/tmp"    # "$WORK/tmp" is the path word splitting would hit
+(cd "$p" && TMPDIR="$WORK/tmp dir" WALPH_SKIP_VERIFY=true FAKE_PROJECT_DIR="$p" FAKE_SCENARIO=pipeline "$ROOT/walph.sh" build --max-iterations 2) > "$out" 2>&1 < /dev/null || true
+expect_contains "tmp with space: build completed" "$out" "All work completed!"
+expect_eq "tmp with space: no temp files left behind" 0 "$(find "$WORK/tmp dir" -type f | wc -l | tr -d ' ')"
+expect_file "tmp with space: the neighbouring path was not removed" "$WORK/tmp"
+
 # ---------------------------------------------------------------- config values with inline comments
 p=$(make_project); out="$WORK/inline-comment.txt"
 printf 'ITERATION_TIMEOUT=2  # seconds\nMAX_ITERATIONS="1"   # quoted\n' >> "$p/.walph/config"

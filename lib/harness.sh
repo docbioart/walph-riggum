@@ -467,13 +467,29 @@ _harness_reduce_stream() {
     printf '%s' "${counted:-0 -}"
 }
 
-# Keep only the tail of the final response. Everything the loop parses (status
+# Keep only the tail of the final response. Everything the LOOP parses (status
 # block, signals) sits at the end, and every "$HARNESS_TEXT" expansion of a
-# huge string costs real time in bash.
-_harness_cap_text() {
+# huge string costs real time in bash. Not applied by harness_parse_result:
+# callers that need the whole response (generated specs, plan reviews) would
+# silently lose the beginning of it.
+harness_cap_text() {
     local cap="${WALPH_OUTPUT_CAP:-200000}"
-    if [[ "$cap" =~ ^[0-9]+$ ]] && [[ "$cap" -gt 0 ]] && [[ ${#HARNESS_TEXT} -gt $cap ]]; then
+    # canonical decimal only: bash reads 08 as invalid octal
+    [[ "$cap" =~ ^[1-9][0-9]*$ ]] || cap=200000
+    if [[ ${#HARNESS_TEXT} -gt $cap ]]; then
         HARNESS_TEXT="${HARNESS_TEXT: -$cap}"
+    fi
+    return 0
+}
+
+# Scratch file of the parse in progress, so an interrupted run can remove it
+# (callers' cleanup handlers call harness_cleanup_scratch)
+HARNESS_SCRATCH_FILE=""
+
+harness_cleanup_scratch() {
+    if [[ -n "$HARNESS_SCRATCH_FILE" ]]; then
+        rm -f -- "$HARNESS_SCRATCH_FILE" 2>/dev/null || true
+        HARNESS_SCRATCH_FILE=""
     fi
     return 0
 }
@@ -517,6 +533,7 @@ _harness_parse_codex() {
 
     local reduced counted
     reduced=$(mktemp)
+    HARNESS_SCRATCH_FILE="$reduced"
     counted=$(_harness_reduce_stream "$out_file" "$reduced" \
         '.type == "turn.completed" or .type == "turn.failed" or .type == "error" or (.type == "item.completed" and ((.item.type // "") == "agent_message"))')
     parsed_lines="${counted%% *}"
@@ -537,7 +554,7 @@ _harness_parse_codex() {
                     | (.message // (.error | if type == "object" then (.message // tostring) else tostring end))))
             )
         }' "$reduced" 2>/dev/null || echo '{"last":"","in":null,"out":null,"complete":false,"errors":[]}')
-    rm -f "$reduced"
+    harness_cleanup_scratch
 
     HARNESS_MALFORMED_LINES=$(( total_lines - parsed_lines ))
     [[ $HARNESS_MALFORMED_LINES -lt 0 ]] && HARNESS_MALFORMED_LINES=0
@@ -574,6 +591,7 @@ _harness_parse_opencode() {
 
     local reduced counted last_type
     reduced=$(mktemp)
+    HARNESS_SCRATCH_FILE="$reduced"
     counted=$(_harness_reduce_stream "$out_file" "$reduced" \
         '.type == "text" or .type == "step_finish" or .type == "error"')
     parsed_lines="${counted%% *}"
@@ -594,7 +612,7 @@ _harness_parse_opencode() {
             errors: ($ev | map(select(.type == "error")
                 | ((.error.name // "Error") + ": " + (.error.data.message // (.error | tostring)))))
         }' "$reduced" 2>/dev/null || echo '{"last":"","in":null,"out":null,"cost":null,"complete":false,"errors":[]}')
-    rm -f "$reduced"
+    harness_cleanup_scratch
 
     HARNESS_MALFORMED_LINES=$(( total_lines - parsed_lines ))
     [[ $HARNESS_MALFORMED_LINES -lt 0 ]] && HARNESS_MALFORMED_LINES=0
@@ -635,8 +653,6 @@ harness_parse_result() {
         opencode) _harness_parse_opencode "$out_file" ;;
         *)        log_error "harness_parse_result: harness not resolved"; return 1 ;;
     esac
-
-    _harness_cap_text
 
     # stderr is a diagnostics channel, and the structured errors drive
     # rate-limit handling and the breaker's same-error counter — so a line

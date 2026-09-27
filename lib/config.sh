@@ -69,8 +69,9 @@ config_value_is_valid() {
         CIRCUIT_BREAKER_NO_COMMIT_THRESHOLD|\
         GOODBUNNY_MAX_ITERATIONS|GOODBUNNY_ITERATION_TIMEOUT|\
         GOODBUNNY_CB_NO_CHANGE|GOODBUNNY_CB_SAME_ERROR|GOODBUNNY_CB_NO_COMMIT)
-            if ! [[ "$value" =~ ^[0-9]+$ ]]; then
-                log_warn "Ignoring config $key='$value' — must be a plain integer"
+            # canonical decimal: bash arithmetic reads 08 as invalid octal
+            if ! [[ "$value" =~ ^(0|[1-9][0-9]*)$ ]]; then
+                log_warn "Ignoring config $key='$value' — must be a plain integer without leading zeros"
                 return 1
             fi
             ;;

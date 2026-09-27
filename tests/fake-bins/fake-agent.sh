@@ -20,6 +20,7 @@
 #                 contain "error", "quota" or a number with 429 in it
 #   net_down_once first call: connection refused, exit 1; later calls: pipeline
 #                 (state in FAKE_NET_MARKER)
+#   net_down      connection refused on every call, exit 1
 #
 # Env: FAKE_PROJECT_DIR (where plan/spec files live), FAKE_ARGV_LOG (append
 # argv here), FAKE_REVIEW=bad (plan review emits no block),
@@ -102,6 +103,10 @@ case "$scenario" in
         echo "warning: mcp server listening on port 9429" >&2
         echo "DVTDeviceOperation: error: unable to write cache quota file" >&2
         text=$(pipeline_text)
+        ;;
+    net_down)
+        echo "request to the API failed, reason: connect ECONNREFUSED 127.0.0.1:443" >&2
+        exit 1
         ;;
     net_down_once)
         if [[ ! -e "${FAKE_NET_MARKER:?}" ]]; then

@@ -42,6 +42,9 @@ cleanup_temp_files() {
         rm -f -- "${JEEROY_TEMP_FILES[@]}" 2>/dev/null || true
         JEEROY_TEMP_FILES=()
     fi
+    if declare -f harness_cleanup_scratch > /dev/null 2>&1; then
+        harness_cleanup_scratch
+    fi
 }
 
 _jeeroy_on_signal() {
