@@ -291,7 +291,7 @@ harness_interactive_cmd() {
             HARNESS_CMD+=("$prompt")
             ;;
         codex)
-            HARNESS_CMD=(codex --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$project_dir")
+            HARNESS_CMD=(codex --dangerously-bypass-approvals-and-sandbox -C "$project_dir")
             if [[ -n "$model" ]]; then
                 HARNESS_CMD+=(-m "$model")
             fi

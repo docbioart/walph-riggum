@@ -173,7 +173,7 @@ unset OPENCODE_CONFIG_CONTENT
 harness_interactive_cmd "" "Read the file"
 assert_eq "interactive opencode" "opencode --auto --prompt Read\\ the\\ file /tmp/proj" "$(harness_cmd_string)"
 HARNESS=codex; harness_interactive_cmd "gpt-6-astra" "hi"
-assert_eq "interactive codex" "codex --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C /tmp/proj -m gpt-6-astra hi" "$(harness_cmd_string)"
+assert_eq "interactive codex" "codex --dangerously-bypass-approvals-and-sandbox -C /tmp/proj -m gpt-6-astra hi" "$(harness_cmd_string)"
 
 # ---------------------------------------------------------------- resolution
 assert_eq "strip quotes double" opus "$(harness_strip_quotes '"opus"')"
