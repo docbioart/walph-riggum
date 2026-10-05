@@ -97,6 +97,8 @@ If your task involves UI, follow the UI Testing principle above: test in a real 
 6. **KISS OVER CLEVER** - Simple, readable code beats clever, compact code. Optimize for understanding.
 7. **DRY CHECK** - Before adding new code, search for existing similar patterns to reuse
 8. **CONTRACT CHECK** - If your task touches an API boundary, verify frontend and backend match (endpoints, field names, types, error shapes) BEFORE committing
+9. **SEARCH BEFORE "UNAVAILABLE"** - Your harness may list tools lazily (MCP servers in a deferred/searchable tool catalog). Before declaring a tool or MCP server unavailable, search for it and try calling it. Its absence from your initial tool list is not evidence.
+10. **SLOW IS NOT STUCK** - Never stop a healthy long-running job (training, builds, migrations) because it is slow or will take hours; the loop's iteration timeout, not your guess, decides how long you may wait. Launch it once and wait for it, polling quietly. If a task is waiting only on a job that is already running, skip to the next independent task instead of signalling stuck.
 
 ## Output
 
