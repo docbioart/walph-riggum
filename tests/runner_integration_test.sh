@@ -187,6 +187,22 @@ expect_contains "net exhausted: the note names the error" "$p/.walph/state/last_
 expect_contains "net exhausted: circuit breaker saw the error" "$p/.walph/state/circuit_breaker.json" "ECONNREFUSED"
 expect_eq "net exhausted: exit 3 (not completed)" 3 "$EC"
 
+# ---------------------------------------------------------------- a repo with no commits yet
+# (the user ran `git init` first, so `walph init` skips its own commit; there
+# `git rev-parse HEAD` prints the literal "HEAD" before failing, and an earlier
+# version wrote "HEAD\nno-git" raw into the state JSON, after which every jq
+# read came back empty and every jq write printed a parse error)
+dir=$(mktemp -d "$WORK/proj.XXXXXX"); name=$(basename "$dir")
+git -C "$dir" init -q
+(cd "$WORK" && "$ROOT/walph.sh" init "$name" --template cli --stack node >/dev/null 2>&1)
+printf '\n- [ ] Task 1.1: Create hello.js [spec: hello.md] (Done when: node hello.js prints hello)\n' >> "$dir/IMPLEMENTATION_PLAN.md"
+p="$dir"; out="$WORK/no-commits.txt"
+FAKE_SCENARIO=pipeline run_walph "$p" "$out" build --max-iterations 2
+expect_not_contains "no commits: no jq parse errors" "$out" "jq: parse error"
+if jq -e . "$p/.walph/state/circuit_breaker.json" >/dev/null 2>&1; then ok; else bad "no commits: circuit breaker state is not valid JSON"; fi
+expect_not_contains "no commits: hash fallback is clean" "$p/.walph/state/circuit_breaker.json" '"HEAD'
+expect_contains "no commits: breaker status readable" "$out" "no_change=[0-9]"
+
 # ---------------------------------------------------------------- a temp dir with a space in its name
 p=$(make_project); out="$WORK/tmpspace.txt"
 mkdir -p "$WORK/tmp dir"; : > "$WORK/tmp"    # "$WORK/tmp" is the path word splitting would hit

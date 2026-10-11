@@ -12,13 +12,13 @@ init_circuit_breaker() {
     local state_dir="$1"
     CIRCUIT_BREAKER_STATE_FILE="$state_dir/circuit_breaker.json"
 
-    # Initialize state file if it doesn't exist
-    if [[ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
-        local current_hash
-        current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
-        local tree_sig
-        tree_sig=$(_working_tree_sig)
-        echo "{\"no_change_count\":0,\"same_error_count\":0,\"no_commit_count\":0,\"last_error\":\"\",\"last_git_hash\":\"$current_hash\",\"last_tree_sig\":\"$tree_sig\",\"iteration_history\":[]}" > "$CIRCUIT_BREAKER_STATE_FILE"
+    # Initialize the state file if it is missing or unparseable. An earlier
+    # version wrote the raw "HEAD\nno-git" that `git rev-parse HEAD` yields on
+    # a repo with no commits straight into the JSON; a broken file makes every
+    # jq read return empty and every jq write fail, so the breaker silently
+    # never trips. Start over instead of carrying it.
+    if [[ ! -f "$CIRCUIT_BREAKER_STATE_FILE" ]] || ! jq -e . "$CIRCUIT_BREAKER_STATE_FILE" >/dev/null 2>&1; then
+        reset_circuit_breaker
     fi
 }
 
@@ -85,7 +85,7 @@ check_file_changes() {
         return 0  # Cannot tell; assume progress
     fi
     local current_hash
-    current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+    current_hash=$(git rev-parse --verify -q HEAD 2>/dev/null || echo "no-git")
     local last_hash
     last_hash=$(_read_state "last_git_hash")
 
@@ -129,7 +129,7 @@ check_commit_activity() {
         return 0  # No repository, no commits to count
     fi
     local current_hash
-    current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+    current_hash=$(git rev-parse --verify -q HEAD 2>/dev/null || echo "no-git")
     local last_hash
     last_hash=$(_read_state "last_git_hash")
 
@@ -208,7 +208,7 @@ update_circuit_breaker() {
         no_commit_count=0
         # Update last git hash
         local current_hash
-        current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+        current_hash=$(git rev-parse --verify -q HEAD 2>/dev/null || echo "no-git")
         _update_state "last_git_hash" "$current_hash"
         log_debug "New commit detected, reset no_commit_count"
     else
@@ -261,7 +261,7 @@ circuit_breaker_triggered() {
 reset_circuit_breaker() {
     if [[ -n "$CIRCUIT_BREAKER_STATE_FILE" ]]; then
         local current_hash
-        current_hash=$(git rev-parse HEAD 2>/dev/null || echo "no-git")
+        current_hash=$(git rev-parse --verify -q HEAD 2>/dev/null || echo "no-git")
         local tree_sig
         tree_sig=$(_working_tree_sig)
         # Use jq for safe JSON generation with --arg to prevent injection
