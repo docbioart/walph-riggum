@@ -594,6 +594,16 @@ The default Docker credentials (`postgres:postgres`) are for development only. C
 - **Tests**: `tests/run_tests.sh` runs a parser suite and a fake-CLI integration suite under bash 3.2
 - The implementation plan for this release and its Codex Astra review are in `docs/reviews/`
 
+## Status (2026-11-12)
+
+Written before the Mac migration so a fresh clone carries the state of the work.
+
+- **Done and works:** everything under What's New above, plus the October fixes on master: `--skip-git-repo-check` dropped from the interactive Codex command (4377ec9), the build prompt tells agents to search the tool catalog before calling a tool unavailable and that slow is not stuck (6a4e479), and the circuit breaker keeps a valid state file on repos with no commits (0f236c1, HEAD, 2026-10-11). `tests/run_tests.sh` passed on 2026-11-12 under /bin/bash 3.2 (131 parser + 170 integration, 0 failed); shellcheck was not installed on this Mac, so lint was not run.
+- **In progress:** nothing on Walph itself. The loop's main consumer is `~/Work/pii-gate` (its own `.walph/` config and plan); that loop is stopped on pii-gate Task 4.10 and waits for a decision recorded in pii-gate's `CLAUDE.md`, section "Status (2026-11-12)". No Walph change came out of that work (inferred: the pii-gate session's commits touched pii-gate only).
+- **Open decisions / next steps:** none recorded for Walph. `JEEROY_PLAN.md` (2026-03) and `REVIEW_FINDINGS.md` (Good Bunny audit of 2026-02-10, 53 findings) are historical; the last commit against the findings is 7150f75 of 2026-08-23 (inferred from its message). The remote branches `laptop-unmerged-2026-09-27` and `merge/harness-and-laptop` are both fully merged into master (verified with `git merge-base --is-ancestor` on 2026-11-12) and are kept only for provenance.
+- **Not in git:** nothing of value. `.goodbunny/logs/`, `.goodbunny/state/`, `*.log` and `.claude/settings.local.json` (local permissions) are ignored.
+- **Run/test:** see Development below (`tests/run_tests.sh`, shellcheck); install with `install.sh`.
+
 ## License
 
 MIT
